@@ -1,0 +1,193 @@
+package com.example.ControlNGR.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import com.example.ControlNGR.dto.AsistenciaRequestDTO;
+import com.example.ControlNGR.dto.AsistenciaResponseDTO;
+import com.example.ControlNGR.entity.Asistencia;
+import com.example.ControlNGR.entity.Empleado;
+import com.example.ControlNGR.entity.Horario;
+import com.example.ControlNGR.repository.AsistenciaRepository;
+import com.example.ControlNGR.repository.EmpleadoRepository;
+import com.example.ControlNGR.repository.HorarioRepository;
+import java.time.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@Service
+public class AsistenciaService {
+    
+    @Autowired
+    private AsistenciaRepository asistenciaRepository;
+    
+    @Autowired
+    private EmpleadoRepository empleadoRepository;
+    
+    @Autowired
+    private HorarioRepository horarioRepository;
+    
+    // Registrar entrada o salida
+    @Transactional
+    public AsistenciaResponseDTO registrarAsistencia(AsistenciaRequestDTO request) {
+        if (request.getEmpleadoId() == null) {
+            throw new RuntimeException("ID de empleado requerido");
+        }
+
+        Optional<Empleado> empleadoOpt = empleadoRepository.findById(request.getEmpleadoId());
+        if (!empleadoOpt.isPresent()) {
+            throw new RuntimeException("Empleado no encontrado");
+        }
+        
+        Empleado empleado = empleadoOpt.get();
+        LocalDate fecha = (request.getFecha() != null) ? request.getFecha() : LocalDate.now();
+        LocalTime hora = (request.getHora() != null) ? request.getHora() : LocalTime.now();
+        
+        // Buscar o crear registro de asistencia para el día
+        Optional<Asistencia> asistenciaOpt = asistenciaRepository.findByEmpleadoAndFecha(empleado, fecha);
+        Asistencia asistencia;
+        
+        if (asistenciaOpt.isPresent()) {
+            asistencia = asistenciaOpt.get();
+        } else {
+            asistencia = new Asistencia(empleado, fecha);
+        }
+        
+        // Determinar si es entrada o salida
+        if ("entrada".equalsIgnoreCase(request.getTipo())) {
+            // Registrar entrada
+            if (asistencia.getHoraEntrada() != null) {
+                throw new RuntimeException("Ya se registró entrada para hoy");
+            }
+            
+            asistencia.setHoraEntrada(hora);
+            
+            // Verificar si es tardanza (lógica simplificada)
+            String diaSemana = fecha.getDayOfWeek().toString().toLowerCase();
+            String diaEsp = traducirDia(diaSemana);
+            
+            Optional<Horario> horarioOpt = horarioRepository.findByEmpleadoIdAndDiaSemana(
+                empleado.getId(), 
+                diaEsp
+            );
+            
+            if (horarioOpt.isPresent()) {
+                Horario horario = horarioOpt.get();
+                if (hora.isAfter(horario.getHoraEntrada().plusMinutes(15))) { // Tolerancia 15 min
+                    asistencia.setEstado("tardanza");
+                    asistencia.setObservaciones("Marcaje tarde");
+                } else {
+                    asistencia.setEstado("presente");
+                }
+            } else {
+                asistencia.setEstado("presente");
+            }
+            
+        } else if ("salida".equalsIgnoreCase(request.getTipo())) {
+            // Registrar salida
+            if (asistencia.getHoraEntrada() == null) {
+                throw new RuntimeException("Debe registrar entrada primero");
+            }
+            if (asistencia.getHoraSalida() != null) {
+                throw new RuntimeException("Ya se registró salida para hoy");
+            }
+            
+            asistencia.setHoraSalida(hora);
+            asistencia.setSalidaAutomatica(false);
+            
+        } else {
+            throw new RuntimeException("Tipo de registro inválido. Use 'entrada' o 'salida'");
+        }
+        
+        // Guardar observaciones si existen
+        if (request.getObservaciones() != null && !request.getObservaciones().trim().isEmpty()) {
+            String observacionesActuales = asistencia.getObservaciones();
+            if (observacionesActuales == null) {
+                asistencia.setObservaciones(request.getObservaciones());
+            } else {
+                asistencia.setObservaciones(observacionesActuales + " | " + request.getObservaciones());
+            }
+        }
+        
+        Asistencia asistenciaGuardada = asistenciaRepository.save(asistencia);
+        return new AsistenciaResponseDTO(asistenciaGuardada);
+    }
+    
+    // TRADUCTOR DE DIAS
+    private String traducirDia(String diaIngles) {
+        switch(diaIngles) {
+            case "monday": return "lunes";
+            case "tuesday": return "martes";
+            case "wednesday": return "miercoles";
+            case "thursday": return "jueves";
+            case "friday": return "viernes";
+            case "saturday": return "sabado";
+            case "sunday": return "domingo";
+            default: return diaIngles;
+        }
+    }
+
+    // MÉTODOS DE LECTURA (IMPORTANTE: @Transactional readOnly = true para evitar error 500)
+    
+    @Transactional(readOnly = true)
+    public List<AsistenciaResponseDTO> obtenerTodasAsistencias() {
+        return asistenciaRepository.findAll().stream()
+                .map(AsistenciaResponseDTO::new)
+                .collect(Collectors.toList());
+    }
+    
+    @Transactional(readOnly = true)
+    public List<AsistenciaResponseDTO> obtenerAsistenciasPorEmpleado(Integer empleadoId) {
+        return asistenciaRepository.findByEmpleadoId(empleadoId).stream()
+                .map(AsistenciaResponseDTO::new)
+                .collect(Collectors.toList());
+    }
+    
+    @Transactional(readOnly = true)
+    public List<AsistenciaResponseDTO> obtenerAsistenciasPorFecha(LocalDate fecha) {
+        return asistenciaRepository.findByFecha(fecha).stream()
+                .map(AsistenciaResponseDTO::new)
+                .collect(Collectors.toList());
+    }
+    
+    @Transactional(readOnly = true)
+    public List<AsistenciaResponseDTO> obtenerAsistenciasPorRango(LocalDate inicio, LocalDate fin) {
+        return asistenciaRepository.findByFechaBetween(inicio, fin).stream()
+                .map(AsistenciaResponseDTO::new)
+                .collect(Collectors.toList());
+    }
+    
+    @Transactional(readOnly = true)
+    public List<AsistenciaResponseDTO> obtenerReporteMensual(Integer empleadoId, int year, int month) {
+        return asistenciaRepository.findByEmpleadoAndMonthYear(empleadoId, year, month).stream()
+                .map(AsistenciaResponseDTO::new)
+                .collect(Collectors.toList());
+    }
+    
+    // Verificar y marcar salidas automáticas
+    @Transactional
+    public void verificarSalidasAutomaticas() {
+        List<Asistencia> asistenciasPendientes = asistenciaRepository.findAsistenciasConSalidaPendiente();
+        LocalDateTime ahora = LocalDateTime.now();
+        
+        for (Asistencia asistencia : asistenciasPendientes) {
+            LocalDateTime horaEntrada = LocalDateTime.of(asistencia.getFecha(), asistencia.getHoraEntrada());
+            long horasTranscurridas = Duration.between(horaEntrada, ahora).toHours();
+            
+            if (horasTranscurridas >= 12) {
+                LocalTime horaSalidaCalculada = asistencia.getHoraEntrada()
+                        .plusHours(9); // 8h trabajo + 1h refrigerio
+                
+                asistencia.setHoraSalida(horaSalidaCalculada);
+                asistencia.setSalidaAutomatica(true);
+                
+                String observacion = "Salida automática por sistema.";
+                String obsActual = asistencia.getObservaciones();
+                asistencia.setObservaciones(obsActual == null ? observacion : obsActual + " " + observacion);
+                
+                asistenciaRepository.save(asistencia);
+            }
+        }
+    }
+}
