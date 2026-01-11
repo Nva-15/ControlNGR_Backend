@@ -11,20 +11,28 @@ import java.util.List;
 @Repository
 public interface SolicitudRepository extends JpaRepository<Solicitud, Integer> {
     
+    // Métodos estándar
     List<Solicitud> findByEmpleadoId(Integer empleadoId);
-    
     List<Solicitud> findByEstado(String estado);
-    
     List<Solicitud> findByTipo(String tipo);
     
+    // Historial ordenado (Para "Mis Solicitudes")
+    List<Solicitud> findByEmpleadoIdOrderByFechaSolicitudDesc(Integer empleadoId);
+    
+    // Bandeja de entrada del Supervisor (filtrado por estado y ordenado)
+    List<Solicitud> findByEstadoOrderByFechaSolicitudDesc(String estado);
+    
+    // Validar conflictos de fechas (Útil para no pedir vacaciones en días ya aprobados)
     @Query("SELECT s FROM Solicitud s WHERE s.empleado.id = :empleadoId AND s.estado = 'aprobado' " +
            "AND :fecha BETWEEN s.fechaInicio AND s.fechaFin")
     List<Solicitud> findSolicitudesAprobadasPorEmpleadoEnFecha(
             @Param("empleadoId") Integer empleadoId,
             @Param("fecha") LocalDate fecha);
     
+    // Reporte por aprobador
     List<Solicitud> findByAprobadoPorId(Integer aprobadoPorId);
     
+    // Consulta explícita para pendientes
     @Query("SELECT s FROM Solicitud s WHERE s.estado = 'pendiente'")
     List<Solicitud> findSolicitudesPendientes();
 }
