@@ -2,6 +2,7 @@ package com.example.ControlNGR.service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID; // Generador de identificador único
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -11,65 +12,70 @@ import com.example.ControlNGR.repository.EmpleadoRepository;
 @Service
 public class EmpleadoService {
     
+    // Repositorio de empleados
     @Autowired
     private EmpleadoRepository empleadoRepository;
     
+    // Encriptador de contraseñas
     @Autowired
     private PasswordEncoder passwordEncoder;
     
-    // Método para login
+    // Validar credenciales de inicio de sesión
     public Optional<Empleado> validarCredenciales(String username, String password) {
         Optional<Empleado> empleadoOpt = empleadoRepository.findByUsername(username);
-        
         if (empleadoOpt.isPresent()) {
             Empleado empleado = empleadoOpt.get();
-            
-            // Verificar si el usuario está activo
-            if (Boolean.TRUE.equals(empleado.getActivo()) && 
+            if (Boolean.TRUE.equals(empleado.getActivo()) &&
                 Boolean.TRUE.equals(empleado.getUsuarioActivo())) {
-                
-                // Verificar contraseña
                 if (passwordEncoder.matches(password, empleado.getPassword())) {
                     return Optional.of(empleado);
                 }
             }
         }
-        
         return Optional.empty();
     }
     
-    // Métodos existentes
+    // Obtener todos los empleados
     public List<Empleado> findAll() {
         return empleadoRepository.findAll();
     }
-    
+
+    // Buscar por ID
     public Optional<Empleado> findById(Integer id) {
         return empleadoRepository.findById(id);
     }
-    
+
+    // Buscar por DNI
     public Optional<Empleado> findByDni(String dni) {
         return empleadoRepository.findByDni(dni);
     }
-    
+
+    // Buscar por username
     public Optional<Empleado> findByUsername(String username) {
         return empleadoRepository.findByUsername(username);
     }
     
+    // Guardar o actualizar empleado
     public Empleado save(Empleado empleado) {
-        // Si es un nuevo empleado o se está actualizando la contraseña
+        
+        // Generar identificador si no existe
+        if (empleado.getIdentificador() == null || empleado.getIdentificador().trim().isEmpty()) {
+            empleado.setIdentificador(UUID.randomUUID().toString());
+        }
+
+        // Encriptar contraseña si es nueva
         if (empleado.getPassword() != null && !empleado.getPassword().trim().isEmpty()) {
-            // Si no empieza con $2a$ o $2y$, encriptarla
             if (!empleado.getPassword().startsWith("$2")) {
                 empleado.setPassword(passwordEncoder.encode(empleado.getPassword()));
             }
         }
         
-        // Si no tiene username, usar el DNI
+        // Asignar username por defecto
         if (empleado.getUsername() == null || empleado.getUsername().trim().isEmpty()) {
             empleado.setUsername(empleado.getDni());
         }
         
-        // Asignar rol por defecto si no tiene
+        // Asignar rol por nivel
         if (empleado.getRol() == null || empleado.getRol().trim().isEmpty()) {
             if (empleado.getNivel() != null) {
                 switch (empleado.getNivel().toLowerCase()) {
@@ -91,22 +97,27 @@ public class EmpleadoService {
         return empleadoRepository.save(empleado);
     }
     
+    // Eliminar por ID
     public void deleteById(Integer id) {
         empleadoRepository.deleteById(id);
     }
-    
+
+    // Verificar DNI existente
     public boolean existsByDni(String dni) {
         return empleadoRepository.existsByDni(dni);
     }
-    
+
+    // Verificar username existente
     public boolean existsByUsername(String username) {
         return empleadoRepository.existsByUsername(username);
     }
-    
+
+    // Buscar por rol
     public List<Empleado> findByRol(String rol) {
         return empleadoRepository.findByRol(rol);
     }
-    
+
+    // Buscar por estado de usuario
     public List<Empleado> findByUsuarioActivo(Boolean activo) {
         return empleadoRepository.findByUsuarioActivo(activo);
     }
