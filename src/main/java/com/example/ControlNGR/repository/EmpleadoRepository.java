@@ -13,6 +13,7 @@ public interface EmpleadoRepository extends JpaRepository<Empleado, Integer> {
     Optional<Empleado> findByIdentificador(String identificador);
     Optional<Empleado> findByDni(String dni);
     Optional<Empleado> findByUsername(String username);
+    Optional<Empleado> findByEmail(String email); // NUEVO
     
     Boolean existsByDni(String dni);
     Boolean existsByUsername(String username);

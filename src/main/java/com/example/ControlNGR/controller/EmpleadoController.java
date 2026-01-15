@@ -27,7 +27,6 @@ public class EmpleadoController {
         return ResponseEntity.ok(empleados);
     }
     
-    // CORREGIDO: ("id")
     @GetMapping("/{id}")
     public ResponseEntity<?> getEmpleadoById(@PathVariable("id") Integer id) {
         Optional<Empleado> empleado = empleadoService.findById(id);
@@ -56,7 +55,6 @@ public class EmpleadoController {
         }
     }
     
-    // CORREGIDO: ("id")
     @PutMapping("/{id}")
     public ResponseEntity<?> updateEmpleado(@PathVariable("id") Integer id, @RequestBody Empleado empleado) {
         try {
@@ -73,7 +71,6 @@ public class EmpleadoController {
         }
     }
     
-    // CORREGIDO: ("id")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteEmpleado(@PathVariable("id") Integer id) {
         try {
@@ -93,7 +90,6 @@ public class EmpleadoController {
         }
     }
     
-    // CORREGIDO: ("nombre")
     @GetMapping("/buscar")
     public ResponseEntity<List<Empleado>> buscarEmpleados(@RequestParam("nombre") String nombre) {
         List<Empleado> empleados = empleadoService.findAll().stream()
@@ -102,7 +98,6 @@ public class EmpleadoController {
         return ResponseEntity.ok(empleados);
     }
     
-    // CORREGIDO: ("rol")
     @GetMapping("/rol/{rol}")
     public ResponseEntity<List<Empleado>> getEmpleadosByRol(@PathVariable("rol") String rol) {
         List<Empleado> empleados = empleadoService.findByRol(rol);
@@ -125,6 +120,114 @@ public class EmpleadoController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error al obtener perfil"));
+        }
+    }
+    
+    // NUEVOS ENDPOINTS PARA ACTUALIZAR PERFIL
+    
+    @PutMapping("/actualizar-perfil/{id}")
+    public ResponseEntity<?> actualizarPerfil(@PathVariable("id") Integer id, @RequestBody Map<String, Object> datos) {
+        try {
+            boolean actualizado = empleadoService.actualizarPerfil(id, datos);
+            if (actualizado) {
+                return ResponseEntity.ok(Map.of(
+                    "message", "Perfil actualizado correctamente",
+                    "success", true
+                ));
+            }
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Empleado no encontrado", "success", false));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al actualizar perfil: " + e.getMessage(), "success", false));
+        }
+    }
+    
+    @PostMapping("/cambiar-password-admin/{id}")
+    public ResponseEntity<?> cambiarPasswordAdmin(@PathVariable("id") Integer id, @RequestBody Map<String, String> request) {
+        try {
+            String passwordNueva = request.get("passwordNueva");
+            if (passwordNueva == null || passwordNueva.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "La nueva contraseña es requerida", "success", false));
+            }
+            
+            if (passwordNueva.length() < 6) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "La contraseña debe tener al menos 6 caracteres", "success", false));
+            }
+            
+            boolean cambiado = empleadoService.cambiarPasswordAdmin(id, passwordNueva);
+            if (cambiado) {
+                return ResponseEntity.ok(Map.of(
+                    "message", "Contraseña cambiada exitosamente",
+                    "success", true
+                ));
+            }
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Empleado no encontrado", "success", false));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al cambiar contraseña: " + e.getMessage(), "success", false));
+        }
+    }
+    
+    @PutMapping("/actualizar-email/{id}")
+    public ResponseEntity<?> actualizarEmail(@PathVariable("id") Integer id, @RequestBody Map<String, String> request) {
+        try {
+            String email = request.get("email");
+            if (email == null || email.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "El email es requerido", "success", false));
+            }
+            
+            // Validar formato de email simple
+            if (!email.contains("@") || !email.contains(".")) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Formato de email inválido", "success", false));
+            }
+            
+            // Verificar si el email ya existe
+            Optional<Empleado> empleadoExistente = empleadoService.findByEmail(email);
+            if (empleadoExistente.isPresent() && !empleadoExistente.get().getId().equals(id)) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "El email ya está registrado por otro usuario", "success", false));
+            }
+            
+            Map<String, Object> datos = new java.util.HashMap<>();
+            datos.put("email", email);
+            
+            boolean actualizado = empleadoService.actualizarPerfil(id, datos);
+            if (actualizado) {
+                return ResponseEntity.ok(Map.of(
+                    "message", "Email actualizado correctamente",
+                    "success", true
+                ));
+            }
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Empleado no encontrado", "success", false));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al actualizar email: " + e.getMessage(), "success", false));
+        }
+    }
+    
+    // Exportar empleados
+    @GetMapping("/exportar")
+    public ResponseEntity<?> exportarEmpleados() {
+        try {
+            List<Map<String, Object>> datos = empleadoService.exportarEmpleados();
+            return ResponseEntity.ok()
+                    .header("Content-Type", "application/json")
+                    .body(Map.of(
+                        "titulo", "Reporte de Empleados",
+                        "fecha_generacion", java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")),
+                        "total_registros", datos.size(),
+                        "datos", datos
+                    ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al exportar empleados: " + e.getMessage()));
         }
     }
 }

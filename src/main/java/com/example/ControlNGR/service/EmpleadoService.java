@@ -2,25 +2,30 @@ package com.example.ControlNGR.service;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID; // Generador de identificador único
+import java.util.UUID;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.example.ControlNGR.entity.Empleado;
 import com.example.ControlNGR.repository.EmpleadoRepository;
 
 @Service
+@Transactional
 public class EmpleadoService {
     
-    // Repositorio de empleados
     @Autowired
     private EmpleadoRepository empleadoRepository;
     
-    // Encriptador de contraseñas
     @Autowired
     private PasswordEncoder passwordEncoder;
     
-    // Validar credenciales de inicio de sesión
+    @Autowired
+    private EmailService emailService;
+    
     public Optional<Empleado> validarCredenciales(String username, String password) {
         Optional<Empleado> empleadoOpt = empleadoRepository.findByUsername(username);
         if (empleadoOpt.isPresent()) {
@@ -35,47 +40,184 @@ public class EmpleadoService {
         return Optional.empty();
     }
     
-    // Obtener todos los empleados
+    // CAMBIAR CONTRASEÑA DESDE PERFIL (valida la actual)
+    public boolean cambiarPassword(Integer empleadoId, String passwordActual, String passwordNueva) {
+        Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
+        if (empleadoOpt.isPresent()) {
+            Empleado empleado = empleadoOpt.get();
+            // Validar que la contraseña actual sea correcta
+            if (passwordEncoder.matches(passwordActual, empleado.getPassword())) {
+                empleado.setPassword(passwordEncoder.encode(passwordNueva));
+                empleadoRepository.save(empleado);
+                
+                // Enviar notificación por email
+                if (empleado.getEmail() != null) {
+                    try {
+                        emailService.enviarNotificacionCambioPassword(empleado.getEmail(), empleado.getNombre());
+                    } catch (Exception e) {
+                        System.err.println("⚠️ Error enviando email de notificación: " + e.getMessage());
+                        // No fallar la operación si el email falla
+                    }
+                }
+                
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    // Cambiar contraseña por admin (sin validar actual)
+    public boolean cambiarPasswordAdmin(Integer empleadoId, String passwordNueva) {
+        Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
+        if (empleadoOpt.isPresent()) {
+            Empleado empleado = empleadoOpt.get();
+            empleado.setPassword(passwordEncoder.encode(passwordNueva));
+            empleadoRepository.save(empleado);
+            
+            // Enviar notificación por email
+            if (empleado.getEmail() != null) {
+                try {
+                    emailService.enviarNotificacionCambioPassword(empleado.getEmail(), empleado.getNombre());
+                } catch (Exception e) {
+                    System.err.println("⚠️ Error enviando email de notificación: " + e.getMessage());
+                }
+            }
+            
+            return true;
+        }
+        return false;
+    }
+    
+    // Actualizar perfil del empleado
+    public boolean actualizarPerfil(Integer empleadoId, Map<String, Object> datos) {
+        Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
+        if (empleadoOpt.isPresent()) {
+            Empleado empleado = empleadoOpt.get();
+            boolean cambiosRealizados = false;
+            
+            // Actualizar campos permitidos
+            if (datos.containsKey("nombre")) {
+                String nuevoNombre = (String) datos.get("nombre");
+                if (nuevoNombre != null && !nuevoNombre.trim().isEmpty() && !nuevoNombre.equals(empleado.getNombre())) {
+                    empleado.setNombre(nuevoNombre.trim());
+                    cambiosRealizados = true;
+                }
+            }
+            
+            if (datos.containsKey("cargo")) {
+                String nuevoCargo = (String) datos.get("cargo");
+                if (nuevoCargo != null && !nuevoCargo.equals(empleado.getCargo())) {
+                    empleado.setCargo(nuevoCargo);
+                    cambiosRealizados = true;
+                }
+            }
+            
+            if (datos.containsKey("descripcion")) {
+                String nuevaDescripcion = (String) datos.get("descripcion");
+                if (nuevaDescripcion != null && !nuevaDescripcion.equals(empleado.getDescripcion())) {
+                    empleado.setDescripcion(nuevaDescripcion);
+                    cambiosRealizados = true;
+                }
+            }
+            
+            if (datos.containsKey("hobby")) {
+                String nuevoHobby = (String) datos.get("hobby");
+                if (nuevoHobby != null && !nuevoHobby.equals(empleado.getHobby())) {
+                    empleado.setHobby(nuevoHobby);
+                    cambiosRealizados = true;
+                }
+            }
+            
+            if (datos.containsKey("cumpleanos")) {
+                try {
+                    String fechaStr = (String) datos.get("cumpleanos");
+                    if (fechaStr != null && !fechaStr.isEmpty()) {
+                        java.time.LocalDate nuevaFecha = java.time.LocalDate.parse(fechaStr);
+                        if (!nuevaFecha.equals(empleado.getCumpleanos())) {
+                            empleado.setCumpleanos(nuevaFecha);
+                            cambiosRealizados = true;
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("⚠️ Error parseando fecha de cumpleaños: " + e.getMessage());
+                }
+            }
+            
+            if (datos.containsKey("email")) {
+                String nuevoEmail = (String) datos.get("email");
+                if (nuevoEmail != null && !nuevoEmail.trim().isEmpty() && !nuevoEmail.equals(empleado.getEmail())) {
+                    empleado.setEmail(nuevoEmail.trim());
+                    cambiosRealizados = true;
+                }
+            }
+            
+            if (datos.containsKey("foto")) {
+                String nuevaFoto = (String) datos.get("foto");
+                if (nuevaFoto != null && !nuevaFoto.equals(empleado.getFoto())) {
+                    empleado.setFoto(nuevaFoto);
+                    cambiosRealizados = true;
+                }
+            }
+            
+            if (cambiosRealizados) {
+                empleadoRepository.save(empleado);
+                
+                // Enviar notificación por email
+                if (empleado.getEmail() != null) {
+                    try {
+                        emailService.enviarNotificacionActualizacionPerfil(empleado.getEmail(), empleado.getNombre());
+                    } catch (Exception e) {
+                        System.err.println("⚠️ Error enviando email de notificación: " + e.getMessage());
+                    }
+                }
+            }
+            
+            return true;
+        }
+        return false;
+    }
+    
     public List<Empleado> findAll() {
         return empleadoRepository.findAll();
     }
 
-    // Buscar por ID
     public Optional<Empleado> findById(Integer id) {
         return empleadoRepository.findById(id);
     }
 
-    // Buscar por DNI
     public Optional<Empleado> findByDni(String dni) {
         return empleadoRepository.findByDni(dni);
     }
 
-    // Buscar por username
     public Optional<Empleado> findByUsername(String username) {
         return empleadoRepository.findByUsername(username);
     }
     
-    // Guardar o actualizar empleado
+    public Optional<Empleado> findByEmail(String email) {
+        return empleadoRepository.findByEmail(email);
+    }
+    
     public Empleado save(Empleado empleado) {
-        
-        // Generar identificador si no existe
         if (empleado.getIdentificador() == null || empleado.getIdentificador().trim().isEmpty()) {
             empleado.setIdentificador(UUID.randomUUID().toString());
         }
 
-        // Encriptar contraseña si es nueva
         if (empleado.getPassword() != null && !empleado.getPassword().trim().isEmpty()) {
             if (!empleado.getPassword().startsWith("$2")) {
                 empleado.setPassword(passwordEncoder.encode(empleado.getPassword()));
             }
         }
         
-        // Asignar username por defecto
         if (empleado.getUsername() == null || empleado.getUsername().trim().isEmpty()) {
             empleado.setUsername(empleado.getDni());
         }
         
-        // Asignar rol por nivel
+        // Generar email si no existe
+        if (empleado.getEmail() == null || empleado.getEmail().trim().isEmpty()) {
+            String emailGenerado = empleado.getUsername() + "@empresa.com";
+            empleado.setEmail(emailGenerado);
+        }
+        
         if (empleado.getRol() == null || empleado.getRol().trim().isEmpty()) {
             if (empleado.getNivel() != null) {
                 switch (empleado.getNivel().toLowerCase()) {
@@ -97,28 +239,59 @@ public class EmpleadoService {
         return empleadoRepository.save(empleado);
     }
     
-    // Eliminar por ID
     public void deleteById(Integer id) {
         empleadoRepository.deleteById(id);
     }
 
-    // Verificar DNI existente
     public boolean existsByDni(String dni) {
         return empleadoRepository.existsByDni(dni);
     }
 
-    // Verificar username existente
     public boolean existsByUsername(String username) {
         return empleadoRepository.existsByUsername(username);
     }
 
-    // Buscar por rol
     public List<Empleado> findByRol(String rol) {
         return empleadoRepository.findByRol(rol);
     }
 
-    // Buscar por estado de usuario
     public List<Empleado> findByUsuarioActivo(Boolean activo) {
         return empleadoRepository.findByUsuarioActivo(activo);
+    }
+    
+    // Exportar datos de empleados
+    public List<Map<String, Object>> exportarEmpleados() {
+        return empleadoRepository.findAll().stream()
+                .map(e -> {
+                    Map<String, Object> datos = new HashMap<>();
+                    datos.put("ID", e.getId());
+                    datos.put("DNI", e.getDni());
+                    datos.put("Nombre", e.getNombre());
+                    datos.put("Cargo", e.getCargo());
+                    datos.put("Nivel", e.getNivel());
+                    datos.put("Email", e.getEmail());
+                    datos.put("Usuario", e.getUsername());
+                    datos.put("Rol", e.getRol());
+                    datos.put("Activo", e.getActivo() != null && e.getActivo() ? "Sí" : "No");
+                    datos.put("Usuario_Activo", e.getUsuarioActivo() != null && e.getUsuarioActivo() ? "Sí" : "No");
+                    datos.put("Fecha_Ingreso", e.getIngreso());
+                    datos.put("Cumpleaños", e.getCumpleanos());
+                    datos.put("Descripción", e.getDescripcion());
+                    datos.put("Hobby", e.getHobby());
+                    return datos;
+                })
+                .collect(Collectors.toList());
+    }
+    
+    // Actualizar email específico
+    public boolean actualizarEmail(Integer empleadoId, String email) {
+        Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
+        if (empleadoOpt.isPresent()) {
+            Empleado empleado = empleadoOpt.get();
+            empleado.setEmail(email);
+            empleadoRepository.save(empleado);
+            return true;
+        }
+        return false;
     }
 }
