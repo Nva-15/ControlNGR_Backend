@@ -17,13 +17,21 @@ public class SolicitudController {
     @Autowired
     private SolicitudService solicitudService;
 
-    // Crear una solicitud
     @PostMapping("/crear")
     public ResponseEntity<?> crearSolicitud(@RequestBody SolicitudRequestDTO request) {
         try {
             SolicitudResponseDTO response = solicitudService.crearSolicitud(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (RuntimeException e) {
+            // Manejar específicamente el error de conflictos
+            if (e.getMessage() != null && e.getMessage().startsWith("CONFLICTO_FECHAS:")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of(
+                            "error", e.getMessage(),
+                            "tieneConflictos", true,
+                            "success", false
+                        ));
+            }
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -31,25 +39,78 @@ public class SolicitudController {
         }
     }
 
-    // Ver mis solicitudes
+    // MANTENER TODO EL RESTO DEL CÓDIGO EXISTENTE SIN CAMBIOS
+    @PostMapping("/verificar-conflictos")
+    public ResponseEntity<?> verificarConflictos(@RequestBody Map<String, Object> request) {
+        try {
+            Integer empleadoId = (Integer) request.get("empleadoId");
+            String fechaInicioStr = (String) request.get("fechaInicio");
+            String fechaFinStr = (String) request.get("fechaFin");
+            
+            if (empleadoId == null || fechaInicioStr == null || fechaFinStr == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Datos incompletos", "success", false));
+            }
+            
+            java.time.LocalDate fechaInicio = java.time.LocalDate.parse(fechaInicioStr);
+            java.time.LocalDate fechaFin = java.time.LocalDate.parse(fechaFinStr);
+            
+            List<com.example.ControlNGR.entity.Solicitud> conflictos = 
+                solicitudService.verificarConflictosFecha(empleadoId, fechaInicio, fechaFin);
+            
+            boolean tieneConflictos = !conflictos.isEmpty();
+            String mensaje = tieneConflictos ? 
+                "Ya existen " + conflictos.size() + " solicitud(es) para este período" :
+                "No hay conflictos de fecha";
+            
+            java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            
+            List<Map<String, Object>> detallesConflictos = conflictos.stream()
+                    .map(s -> {
+                        Map<String, Object> detalle = new java.util.HashMap<>();
+                        detalle.put("id", s.getId());
+                        detalle.put("tipo", s.getTipo());
+                        detalle.put("fechaInicio", s.getFechaInicio().format(formatter));
+                        detalle.put("fechaFin", s.getFechaFin().format(formatter));
+                        detalle.put("estado", s.getEstado());
+                        detalle.put("motivo", s.getMotivo());
+                        return detalle;
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+            
+            Map<String, Object> respuesta = new java.util.HashMap<>();
+            respuesta.put("tieneConflictos", tieneConflictos);
+            respuesta.put("mensaje", mensaje);
+            respuesta.put("totalConflictos", conflictos.size());
+            respuesta.put("conflictos", detallesConflictos);
+            respuesta.put("success", true);
+            
+            return ResponseEntity.ok(respuesta);
+            
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage(), "success", false));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al verificar conflictos: " + e.getMessage(), "success", false));
+        }
+    }
+
+    // TODOS LOS DEMÁS MÉTODOS PERMANECEN IGUAL
     @GetMapping("/mis-solicitudes/{empleadoId}")
     public ResponseEntity<List<SolicitudResponseDTO>> getMisSolicitudes(@PathVariable("empleadoId") Integer empleadoId) {
         return ResponseEntity.ok(solicitudService.obtenerMisSolicitudes(empleadoId));
     }
 
-    // Ver pendientes
     @GetMapping("/pendientes")
     public ResponseEntity<List<SolicitudResponseDTO>> getPendientes() {
         return ResponseEntity.ok(solicitudService.obtenerPendientes());
     }
     
-    // Ver todas
     @GetMapping("/todas")
     public ResponseEntity<List<SolicitudResponseDTO>> getTodas() {
         return ResponseEntity.ok(solicitudService.obtenerTodas());
     }
     
-    // Ver historial (excluyendo pendientes)
     @GetMapping("/historial")
     public ResponseEntity<List<SolicitudResponseDTO>> getHistorial() {
         List<SolicitudResponseDTO> todas = solicitudService.obtenerTodas();
@@ -59,7 +120,6 @@ public class SolicitudController {
         return ResponseEntity.ok(historial);
     }
 
-    // Aprobar o Rechazar
     @PutMapping("/gestionar/{id}")
     public ResponseEntity<?> gestionarSolicitud(
             @PathVariable("id") Integer id,
@@ -68,7 +128,6 @@ public class SolicitudController {
             String estado = (String) payload.get("estado");
             Integer idAprobador;
             
-            // Compatibilidad con diferentes nombres de campo
             if (payload.containsKey("empleadoId")) {
                 idAprobador = (Integer) payload.get("empleadoId");
             } else if (payload.containsKey("usuarioId")) {
@@ -95,7 +154,6 @@ public class SolicitudController {
         }
     }
     
-    // Editar solicitud
     @PutMapping("/editar/{id}")
     public ResponseEntity<?> editarSolicitud(
             @PathVariable("id") Integer id,
@@ -109,7 +167,6 @@ public class SolicitudController {
         }
     }
     
-    // Exportar solicitudes
     @GetMapping("/exportar/{tipo}")
     public ResponseEntity<?> exportarSolicitudes(
             @PathVariable("tipo") String tipoReporte,
@@ -127,57 +184,6 @@ public class SolicitudController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error al exportar: " + e.getMessage()));
-        }
-    }
-    
-    // Verificar conflictos para una nueva solicitud
-    @PostMapping("/verificar-conflictos")
-    public ResponseEntity<?> verificarConflictos(@RequestBody Map<String, Object> request) {
-        try {
-            Integer empleadoId = (Integer) request.get("empleadoId");
-            String fechaInicioStr = (String) request.get("fechaInicio");
-            String fechaFinStr = (String) request.get("fechaFin");
-            
-            if (empleadoId == null || fechaInicioStr == null || fechaFinStr == null) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Datos incompletos"));
-            }
-            
-            java.time.LocalDate fechaInicio = java.time.LocalDate.parse(fechaInicioStr);
-            java.time.LocalDate fechaFin = java.time.LocalDate.parse(fechaFinStr);
-            
-            // Llamar al servicio para verificar conflictos
-            List<com.example.ControlNGR.entity.Solicitud> conflictos = 
-                solicitudService.verificarConflictosFecha(empleadoId, fechaInicio, fechaFin);
-            
-            boolean tieneConflictos = !conflictos.isEmpty();
-            String mensaje = tieneConflictos ? 
-                "⚠️ Ya existen " + conflictos.size() + " solicitud(es) para este período" :
-                "✅ No hay conflictos de fecha";
-            
-            List<Map<String, Object>> detallesConflictos = conflictos.stream()
-                    .map(s -> {
-                        Map<String, Object> detalle = new java.util.HashMap<>();
-                        detalle.put("id", s.getId());
-                        detalle.put("tipo", s.getTipo());
-                        detalle.put("fechaInicio", s.getFechaInicio());
-                        detalle.put("fechaFin", s.getFechaFin());
-                        detalle.put("estado", s.getEstado());
-                        detalle.put("motivo", s.getMotivo());
-                        return detalle;
-                    })
-                    .collect(java.util.stream.Collectors.toList());
-            
-            Map<String, Object> respuesta = new java.util.HashMap<>();
-            respuesta.put("tieneConflictos", tieneConflictos);
-            respuesta.put("mensaje", mensaje);
-            respuesta.put("totalConflictos", conflictos.size());
-            respuesta.put("conflictos", detallesConflictos);
-            
-            return ResponseEntity.ok(respuesta);
-            
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error al verificar conflictos: " + e.getMessage()));
         }
     }
 }

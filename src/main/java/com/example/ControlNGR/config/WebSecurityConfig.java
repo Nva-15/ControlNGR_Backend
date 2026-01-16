@@ -72,6 +72,8 @@ public class WebSecurityConfig {
                 
                 .requestMatchers("/api/asistencia/**", "/api/solicitudes/**")
                     .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO")
+                .requestMatchers("/api/solicitudes/exportar/**")
+                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO")
                 
                 // El resto requiere autenticación
                 .anyRequest().authenticated()

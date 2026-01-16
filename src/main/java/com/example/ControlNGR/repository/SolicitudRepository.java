@@ -35,4 +35,16 @@ public interface SolicitudRepository extends JpaRepository<Solicitud, Integer> {
     // Consulta explícita para pendientes
     @Query("SELECT s FROM Solicitud s WHERE s.estado = 'pendiente'")
     List<Solicitud> findSolicitudesPendientes();
+    
+    // NUEVO MÉTODO PARA CONFLICTOS
+    @Query("SELECT s FROM Solicitud s WHERE s.empleado.id = :empleadoId " +
+           "AND s.estado IN ('pendiente', 'aprobado') " +
+           "AND ((s.fechaInicio BETWEEN :fechaInicio AND :fechaFin) OR " +
+           "(s.fechaFin BETWEEN :fechaInicio AND :fechaFin) OR " +
+           "(:fechaInicio BETWEEN s.fechaInicio AND s.fechaFin) OR " +
+           "(:fechaFin BETWEEN s.fechaInicio AND s.fechaFin))")
+    List<Solicitud> findConflictosPorRangoFechas(
+            @Param("empleadoId") Integer empleadoId,
+            @Param("fechaInicio") LocalDate fechaInicio,
+            @Param("fechaFin") LocalDate fechaFin);
 }

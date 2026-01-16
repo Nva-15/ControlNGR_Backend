@@ -40,23 +40,19 @@ public class EmpleadoService {
         return Optional.empty();
     }
     
-    // CAMBIAR CONTRASEÑA DESDE PERFIL (valida la actual)
     public boolean cambiarPassword(Integer empleadoId, String passwordActual, String passwordNueva) {
         Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
         if (empleadoOpt.isPresent()) {
             Empleado empleado = empleadoOpt.get();
-            // Validar que la contraseña actual sea correcta
             if (passwordEncoder.matches(passwordActual, empleado.getPassword())) {
                 empleado.setPassword(passwordEncoder.encode(passwordNueva));
                 empleadoRepository.save(empleado);
                 
-                // Enviar notificación por email
-                if (empleado.getEmail() != null) {
+                if (empleado.getEmail() != null && !empleado.getEmail().trim().isEmpty()) {
                     try {
                         emailService.enviarNotificacionCambioPassword(empleado.getEmail(), empleado.getNombre());
                     } catch (Exception e) {
                         System.err.println("⚠️ Error enviando email de notificación: " + e.getMessage());
-                        // No fallar la operación si el email falla
                     }
                 }
                 
@@ -66,7 +62,6 @@ public class EmpleadoService {
         return false;
     }
     
-    // Cambiar contraseña por admin (sin validar actual)
     public boolean cambiarPasswordAdmin(Integer empleadoId, String passwordNueva) {
         Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
         if (empleadoOpt.isPresent()) {
@@ -74,8 +69,7 @@ public class EmpleadoService {
             empleado.setPassword(passwordEncoder.encode(passwordNueva));
             empleadoRepository.save(empleado);
             
-            // Enviar notificación por email
-            if (empleado.getEmail() != null) {
+            if (empleado.getEmail() != null && !empleado.getEmail().trim().isEmpty()) {
                 try {
                     emailService.enviarNotificacionCambioPassword(empleado.getEmail(), empleado.getNombre());
                 } catch (Exception e) {
@@ -88,14 +82,12 @@ public class EmpleadoService {
         return false;
     }
     
-    // Actualizar perfil del empleado
     public boolean actualizarPerfil(Integer empleadoId, Map<String, Object> datos) {
         Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
         if (empleadoOpt.isPresent()) {
             Empleado empleado = empleadoOpt.get();
             boolean cambiosRealizados = false;
             
-            // Actualizar campos permitidos
             if (datos.containsKey("nombre")) {
                 String nuevoNombre = (String) datos.get("nombre");
                 if (nuevoNombre != null && !nuevoNombre.trim().isEmpty() && !nuevoNombre.equals(empleado.getNombre())) {
@@ -146,6 +138,10 @@ public class EmpleadoService {
             if (datos.containsKey("email")) {
                 String nuevoEmail = (String) datos.get("email");
                 if (nuevoEmail != null && !nuevoEmail.trim().isEmpty() && !nuevoEmail.equals(empleado.getEmail())) {
+                    Optional<Empleado> empleadoExistente = empleadoRepository.findByEmail(nuevoEmail);
+                    if (empleadoExistente.isPresent() && !empleadoExistente.get().getId().equals(empleadoId)) {
+                        throw new RuntimeException("El email ya está registrado por otro usuario");
+                    }
                     empleado.setEmail(nuevoEmail.trim());
                     cambiosRealizados = true;
                 }
@@ -162,8 +158,7 @@ public class EmpleadoService {
             if (cambiosRealizados) {
                 empleadoRepository.save(empleado);
                 
-                // Enviar notificación por email
-                if (empleado.getEmail() != null) {
+                if (empleado.getEmail() != null && !empleado.getEmail().trim().isEmpty()) {
                     try {
                         emailService.enviarNotificacionActualizacionPerfil(empleado.getEmail(), empleado.getNombre());
                     } catch (Exception e) {
@@ -212,9 +207,8 @@ public class EmpleadoService {
             empleado.setUsername(empleado.getDni());
         }
         
-        // Generar email si no existe
         if (empleado.getEmail() == null || empleado.getEmail().trim().isEmpty()) {
-            String emailGenerado = empleado.getUsername() + "@empresa.com";
+            String emailGenerado = empleado.getUsername() + "@ngr.com.pe";
             empleado.setEmail(emailGenerado);
         }
         
@@ -259,7 +253,6 @@ public class EmpleadoService {
         return empleadoRepository.findByUsuarioActivo(activo);
     }
     
-    // Exportar datos de empleados
     public List<Map<String, Object>> exportarEmpleados() {
         return empleadoRepository.findAll().stream()
                 .map(e -> {
@@ -283,11 +276,16 @@ public class EmpleadoService {
                 .collect(Collectors.toList());
     }
     
-    // Actualizar email específico
     public boolean actualizarEmail(Integer empleadoId, String email) {
         Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
         if (empleadoOpt.isPresent()) {
             Empleado empleado = empleadoOpt.get();
+            
+            Optional<Empleado> empleadoExistente = empleadoRepository.findByEmail(email);
+            if (empleadoExistente.isPresent() && !empleadoExistente.get().getId().equals(empleadoId)) {
+                throw new RuntimeException("El email ya está registrado por otro usuario");
+            }
+            
             empleado.setEmail(email);
             empleadoRepository.save(empleado);
             return true;

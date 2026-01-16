@@ -15,22 +15,19 @@ public class EmailService {
     
     private final RestTemplate restTemplate = new RestTemplate();
     
-    /**
-     * Envía notificación sobre estado de solicitud
-     */
-    public void enviarNotificacionSolicitud(String destinatario, String empleadoNombre, 
+    public void enviarNotificacionSolicitud(String destinatarioReal, String empleadoNombre, 
                                            String tipoSolicitud, String estado, 
                                            String comentarios, String fechaInicio, 
                                            String fechaFin) {
         try {
-            // Formatear el tipo de solicitud
             String tipoFormateado = formatearTipoSolicitud(tipoSolicitud);
             String estadoFormateado = formatearEstado(estado);
             
             Map<String, String> emailData = new HashMap<>();
             emailData.put("_replyto", "sistema@controlngr.com");
             emailData.put("_subject", "Notificación de Solicitud - Sistema ControlNGR");
-            emailData.put("destinatario", destinatario);
+            emailData.put("destinatario_real", destinatarioReal);
+            emailData.put("email", destinatarioReal);
             emailData.put("empleado", empleadoNombre);
             emailData.put("tipo", tipoFormateado);
             emailData.put("estado", estadoFormateado);
@@ -62,20 +59,17 @@ public class EmailService {
             ResponseEntity<String> response = restTemplate.postForEntity(formspreeUrl, request, String.class);
             
             if (response.getStatusCode() == HttpStatus.OK) {
-                System.out.println("✅ Email enviado a: " + destinatario);
+                System.out.println("✅ Email enviado a: " + destinatarioReal);
             } else {
-                System.out.println("❌ Error al enviar email: " + response.getStatusCode());
+                System.out.println("❌ Error al enviar email a " + destinatarioReal + ": " + response.getStatusCode());
             }
             
         } catch (Exception e) {
-            System.err.println("❌ Error en servicio de email: " + e.getMessage());
+            System.err.println("❌ Error en servicio de email para " + destinatarioReal + ": " + e.getMessage());
         }
     }
     
-    /**
-     * Envía notificación sobre nueva solicitud a supervisores
-     */
-    public void enviarNotificacionNuevaSolicitud(String destinatario, String supervisorNombre, 
+    public void enviarNotificacionNuevaSolicitud(String destinatarioReal, String supervisorNombre, 
                                                 String empleadoNombre, String tipoSolicitud,
                                                 String fechaInicio, String fechaFin) {
         try {
@@ -84,7 +78,8 @@ public class EmailService {
             Map<String, String> emailData = new HashMap<>();
             emailData.put("_replyto", "sistema@controlngr.com");
             emailData.put("_subject", "⚠️ NUEVA SOLICITUD PENDIENTE - Sistema ControlNGR");
-            emailData.put("destinatario", destinatario);
+            emailData.put("destinatario_real", destinatarioReal);
+            emailData.put("email", destinatarioReal);
             emailData.put("supervisor", supervisorNombre);
             emailData.put("empleado", empleadoNombre);
             emailData.put("tipo", tipoFormateado);
@@ -116,24 +111,26 @@ public class EmailService {
             headers.setContentType(MediaType.APPLICATION_JSON);
             
             HttpEntity<Map<String, String>> request = new HttpEntity<>(emailData, headers);
-            restTemplate.postForEntity(formspreeUrl, request, String.class);
+            ResponseEntity<String> response = restTemplate.postForEntity(formspreeUrl, request, String.class);
             
-            System.out.println("✅ Notificación de nueva solicitud enviada a: " + destinatario);
+            if (response.getStatusCode() == HttpStatus.OK) {
+                System.out.println("✅ Notificación enviada a supervisor: " + destinatarioReal);
+            } else {
+                System.out.println("❌ Error enviando a supervisor " + destinatarioReal);
+            }
             
         } catch (Exception e) {
-            System.err.println("❌ Error enviando notificación de nueva solicitud: " + e.getMessage());
+            System.err.println("❌ Error enviando notificación a " + destinatarioReal + ": " + e.getMessage());
         }
     }
     
-    /**
-     * Envía notificación de cambio de contraseña
-     */
-    public void enviarNotificacionCambioPassword(String destinatario, String empleadoNombre) {
+    public void enviarNotificacionCambioPassword(String destinatarioReal, String empleadoNombre) {
         try {
             Map<String, String> emailData = new HashMap<>();
             emailData.put("_replyto", "sistema@controlngr.com");
             emailData.put("_subject", "🔐 Cambio de Contraseña - Sistema ControlNGR");
-            emailData.put("destinatario", destinatario);
+            emailData.put("destinatario_real", destinatarioReal);
+            emailData.put("email", destinatarioReal);
             emailData.put("empleado", empleadoNombre);
             emailData.put("message", 
                 "Hola " + empleadoNombre + ",\n\n" +
@@ -161,24 +158,26 @@ public class EmailService {
             headers.setContentType(MediaType.APPLICATION_JSON);
             
             HttpEntity<Map<String, String>> request = new HttpEntity<>(emailData, headers);
-            restTemplate.postForEntity(formspreeUrl, request, String.class);
+            ResponseEntity<String> response = restTemplate.postForEntity(formspreeUrl, request, String.class);
             
-            System.out.println("✅ Notificación de cambio de password enviada a: " + destinatario);
+            if (response.getStatusCode() == HttpStatus.OK) {
+                System.out.println("✅ Notificación de cambio de password enviada a: " + destinatarioReal);
+            } else {
+                System.out.println("❌ Error enviando notificación a " + destinatarioReal);
+            }
             
         } catch (Exception e) {
-            System.err.println("❌ Error enviando notificación de cambio de password: " + e.getMessage());
+            System.err.println("❌ Error enviando notificación de cambio de password a " + destinatarioReal + ": " + e.getMessage());
         }
     }
     
-    /**
-     * Envía notificación de actualización de perfil
-     */
-    public void enviarNotificacionActualizacionPerfil(String destinatario, String empleadoNombre) {
+    public void enviarNotificacionActualizacionPerfil(String destinatarioReal, String empleadoNombre) {
         try {
             Map<String, String> emailData = new HashMap<>();
             emailData.put("_replyto", "sistema@controlngr.com");
             emailData.put("_subject", "📝 Actualización de Perfil - Sistema ControlNGR");
-            emailData.put("destinatario", destinatario);
+            emailData.put("destinatario_real", destinatarioReal);
+            emailData.put("email", destinatarioReal);
             emailData.put("empleado", empleadoNombre);
             emailData.put("message", 
                 "Hola " + empleadoNombre + ",\n\n" +
@@ -206,12 +205,16 @@ public class EmailService {
             headers.setContentType(MediaType.APPLICATION_JSON);
             
             HttpEntity<Map<String, String>> request = new HttpEntity<>(emailData, headers);
-            restTemplate.postForEntity(formspreeUrl, request, String.class);
+            ResponseEntity<String> response = restTemplate.postForEntity(formspreeUrl, request, String.class);
             
-            System.out.println("✅ Notificación de actualización de perfil enviada a: " + destinatario);
+            if (response.getStatusCode() == HttpStatus.OK) {
+                System.out.println("✅ Notificación de actualización de perfil enviada a: " + destinatarioReal);
+            } else {
+                System.out.println("❌ Error enviando notificación a " + destinatarioReal);
+            }
             
         } catch (Exception e) {
-            System.err.println("❌ Error enviando notificación de actualización de perfil: " + e.getMessage());
+            System.err.println("❌ Error enviando notificación de actualización de perfil a " + destinatarioReal + ": " + e.getMessage());
         }
     }
     
