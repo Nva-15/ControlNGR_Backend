@@ -135,6 +135,10 @@ public class SolicitudService {
     public List<Solicitud> verificarConflictosFecha(Integer empleadoId, 
                                                    java.time.LocalDate fechaInicio, 
                                                    java.time.LocalDate fechaFin) {
+        if (fechaInicio.isAfter(fechaFin)) {
+            throw new RuntimeException("La fecha de inicio no puede ser posterior a la fecha de fin");
+        }
+        
         return solicitudRepository.findConflictosPorRangoFechas(empleadoId, fechaInicio, fechaFin);
     }
 

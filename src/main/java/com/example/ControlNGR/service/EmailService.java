@@ -26,7 +26,6 @@ public class EmailService {
             Map<String, String> emailData = new HashMap<>();
             emailData.put("_replyto", "sistema@controlngr.com");
             emailData.put("_subject", "Notificación de Solicitud - Sistema ControlNGR");
-            emailData.put("destinatario_real", destinatarioReal);
             emailData.put("email", destinatarioReal);
             emailData.put("empleado", empleadoNombre);
             emailData.put("tipo", tipoFormateado);
@@ -78,7 +77,6 @@ public class EmailService {
             Map<String, String> emailData = new HashMap<>();
             emailData.put("_replyto", "sistema@controlngr.com");
             emailData.put("_subject", "⚠️ NUEVA SOLICITUD PENDIENTE - Sistema ControlNGR");
-            emailData.put("destinatario_real", destinatarioReal);
             emailData.put("email", destinatarioReal);
             emailData.put("supervisor", supervisorNombre);
             emailData.put("empleado", empleadoNombre);
@@ -129,7 +127,6 @@ public class EmailService {
             Map<String, String> emailData = new HashMap<>();
             emailData.put("_replyto", "sistema@controlngr.com");
             emailData.put("_subject", "🔐 Cambio de Contraseña - Sistema ControlNGR");
-            emailData.put("destinatario_real", destinatarioReal);
             emailData.put("email", destinatarioReal);
             emailData.put("empleado", empleadoNombre);
             emailData.put("message", 
@@ -176,7 +173,6 @@ public class EmailService {
             Map<String, String> emailData = new HashMap<>();
             emailData.put("_replyto", "sistema@controlngr.com");
             emailData.put("_subject", "📝 Actualización de Perfil - Sistema ControlNGR");
-            emailData.put("destinatario_real", destinatarioReal);
             emailData.put("email", destinatarioReal);
             emailData.put("empleado", empleadoNombre);
             emailData.put("message", 

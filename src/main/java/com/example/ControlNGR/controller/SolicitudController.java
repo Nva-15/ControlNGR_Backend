@@ -23,15 +23,6 @@ public class SolicitudController {
             SolicitudResponseDTO response = solicitudService.crearSolicitud(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (RuntimeException e) {
-            // Manejar específicamente el error de conflictos
-            if (e.getMessage() != null && e.getMessage().startsWith("CONFLICTO_FECHAS:")) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(Map.of(
-                            "error", e.getMessage(),
-                            "tieneConflictos", true,
-                            "success", false
-                        ));
-            }
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -39,28 +30,35 @@ public class SolicitudController {
         }
     }
 
-    // MANTENER TODO EL RESTO DEL CÓDIGO EXISTENTE SIN CAMBIOS
     @PostMapping("/verificar-conflictos")
     public ResponseEntity<?> verificarConflictos(@RequestBody Map<String, Object> request) {
         try {
+            System.out.println("=== ENDPOINT /verificar-conflictos INICIADO ===");
+            System.out.println("Datos recibidos: " + request);
+            
             Integer empleadoId = (Integer) request.get("empleadoId");
             String fechaInicioStr = (String) request.get("fechaInicio");
             String fechaFinStr = (String) request.get("fechaFin");
             
             if (empleadoId == null || fechaInicioStr == null || fechaFinStr == null) {
+                System.out.println("Error: Datos incompletos");
                 return ResponseEntity.badRequest().body(Map.of("error", "Datos incompletos", "success", false));
             }
             
             java.time.LocalDate fechaInicio = java.time.LocalDate.parse(fechaInicioStr);
             java.time.LocalDate fechaFin = java.time.LocalDate.parse(fechaFinStr);
             
+            System.out.println("Parseando fechas:");
+            System.out.println("  fechaInicio: " + fechaInicio);
+            System.out.println("  fechaFin: " + fechaFin);
+            
             List<com.example.ControlNGR.entity.Solicitud> conflictos = 
                 solicitudService.verificarConflictosFecha(empleadoId, fechaInicio, fechaFin);
             
             boolean tieneConflictos = !conflictos.isEmpty();
             String mensaje = tieneConflictos ? 
-                "Ya existen " + conflictos.size() + " solicitud(es) para este período" :
-                "No hay conflictos de fecha";
+                "⚠️ Ya existen " + conflictos.size() + " solicitud(es) para este período" :
+                "✅ No hay conflictos de fecha";
             
             java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
             
@@ -84,18 +82,23 @@ public class SolicitudController {
             respuesta.put("conflictos", detallesConflictos);
             respuesta.put("success", true);
             
+            System.out.println("Respuesta enviada: " + respuesta);
+            System.out.println("=== ENDPOINT /verificar-conflictos FINALIZADO ===");
+            
             return ResponseEntity.ok(respuesta);
             
         } catch (RuntimeException e) {
+            System.err.println("❌ Error en /verificar-conflictos: " + e.getMessage());
             return ResponseEntity.badRequest()
                     .body(Map.of("error", e.getMessage(), "success", false));
         } catch (Exception e) {
+            System.err.println("❌ Error en /verificar-conflictos: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error al verificar conflictos: " + e.getMessage(), "success", false));
         }
     }
 
-    // TODOS LOS DEMÁS MÉTODOS PERMANECEN IGUAL
     @GetMapping("/mis-solicitudes/{empleadoId}")
     public ResponseEntity<List<SolicitudResponseDTO>> getMisSolicitudes(@PathVariable("empleadoId") Integer empleadoId) {
         return ResponseEntity.ok(solicitudService.obtenerMisSolicitudes(empleadoId));

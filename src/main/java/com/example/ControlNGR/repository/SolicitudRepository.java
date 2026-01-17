@@ -47,4 +47,5 @@ public interface SolicitudRepository extends JpaRepository<Solicitud, Integer> {
             @Param("empleadoId") Integer empleadoId,
             @Param("fechaInicio") LocalDate fechaInicio,
             @Param("fechaFin") LocalDate fechaFin);
+    
 }
