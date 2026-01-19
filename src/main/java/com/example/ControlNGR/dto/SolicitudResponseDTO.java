@@ -2,6 +2,7 @@ package com.example.ControlNGR.dto;
 
 import com.example.ControlNGR.entity.Solicitud;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class SolicitudResponseDTO {
     private Integer id;
@@ -17,6 +18,8 @@ public class SolicitudResponseDTO {
     private LocalDateTime fechaAprobacion;
     private boolean tieneConflictos;
     
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
+    
     public SolicitudResponseDTO() {}
     
     public SolicitudResponseDTO(Solicitud solicitud) {
@@ -25,17 +28,16 @@ public class SolicitudResponseDTO {
         this.empleadoNombre = solicitud.getEmpleado().getNombre();
         this.tipo = solicitud.getTipo();
         this.fechaSolicitud = solicitud.getFechaSolicitud();
-        this.fechaInicio = solicitud.getFechaInicio().toString();
-        this.fechaFin = solicitud.getFechaFin().toString();
+        this.fechaInicio = solicitud.getFechaInicio().format(DATE_FORMATTER);
+        this.fechaFin = solicitud.getFechaFin().format(DATE_FORMATTER);
         this.motivo = solicitud.getMotivo();
         this.estado = solicitud.getEstado();
-        this.aprobadoPor = solicitud.getAprobadoPor() != null ? 
-            solicitud.getAprobadoPor().getNombre() : null;
+        this.aprobadoPor = solicitud.getAprobadoPor() != null ? solicitud.getAprobadoPor().getNombre() : null;
         this.fechaAprobacion = solicitud.getFechaAprobacion();
         this.tieneConflictos = false;
     }
     
-    // Getters y Setters
+    // Getters y Setters (todos iguales)
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
     
