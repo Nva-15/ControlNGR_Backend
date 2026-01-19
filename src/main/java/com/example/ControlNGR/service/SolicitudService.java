@@ -37,8 +37,10 @@ public class SolicitudService {
             throw new RuntimeException("La fecha de inicio no puede ser posterior a la fecha de fin");
         }
         
-        List<Solicitud> conflictos = verificarConflictosFecha(
-            request.getEmpleadoId(), 
+        String rolEmpleado = empleado.getRol();
+        List<Solicitud> conflictos = verificarConflictosPorRolYFechas(
+            empleado.getId(), 
+            rolEmpleado,
             request.getFechaInicio(), 
             request.getFechaFin()
         );
@@ -56,13 +58,13 @@ public class SolicitudService {
         if (tieneConflictos) {
             String motivoOriginal = solicitud.getMotivo() != null ? solicitud.getMotivo() : "";
             String notaConflictos = "\n\n⚠️ NOTA: Esta solicitud presenta conflictos de fecha con " + 
-                conflictos.size() + " solicitud(es) existente(s).";
+                conflictos.size() + " solicitud(es) existente(s) para el mismo rol (" + rolEmpleado + ").";
             solicitud.setMotivo(motivoOriginal + notaConflictos);
         }
         
         boolean esAutoAprobada = false;
-        if (("supervisor".equals(empleado.getRol()) || "admin".equals(empleado.getRol())) && 
-            !"vacaciones".equals(request.getTipo())) {
+        
+        if ("admin".equals(empleado.getRol()) && !"vacaciones".equals(request.getTipo())) {
             solicitud.setEstado("aprobado");
             solicitud.setAprobadoPor(empleado);
             solicitud.setFechaAprobacion(LocalDateTime.now());
@@ -83,7 +85,7 @@ public class SolicitudService {
                         empleado.getNombre(),
                         request.getTipo(),
                         "aprobado",
-                        "Solicitud auto-aprobada",
+                        "Solicitud auto-aprobada (solo admin)",
                         fechaInicioStr,
                         fechaFinStr
                     );
@@ -91,7 +93,7 @@ public class SolicitudService {
             } else {
                 if (empleado.getEmail() != null && !empleado.getEmail().trim().isEmpty()) {
                     String comentarioEmail = tieneConflictos ? 
-                        "Tu solicitud ha sido recibida. ⚠️ NOTA: Hay conflictos de fechas con solicitudes existentes." :
+                        "Tu solicitud ha sido recibida. ⚠️ NOTA: Hay conflictos de fechas con solicitudes existentes para tu rol (" + rolEmpleado + "). La solicitud será evaluada." :
                         "Tu solicitud ha sido recibida y está en revisión";
                     
                     emailService.enviarNotificacionSolicitud(
@@ -105,24 +107,10 @@ public class SolicitudService {
                     );
                 }
                 
-                List<Empleado> supervisores = empleadoRepository.findByRol("supervisor");
-                
-                for (Empleado supervisor : supervisores) {
-                    if (supervisor.getEmail() != null && 
-                        !supervisor.getEmail().trim().isEmpty() &&
-                        supervisor.getUsuarioActivo() != null && 
-                        supervisor.getUsuarioActivo() &&
-                        !supervisor.getId().equals(empleado.getId())) {
-                        
-                        emailService.enviarNotificacionNuevaSolicitud(
-                            supervisor.getEmail(),
-                            supervisor.getNombre(),
-                            empleado.getNombre(),
-                            request.getTipo(),
-                            fechaInicioStr,
-                            fechaFinStr
-                        );
-                    }
+                if ("tecnico".equals(empleado.getRol())) {
+                    notificarSupervisoresNuevaSolicitud(empleado, request, fechaInicioStr, fechaFinStr);
+                } else if ("supervisor".equals(empleado.getRol())) {
+                    notificarAdminsNuevaSolicitud(empleado, request, fechaInicioStr, fechaFinStr);
                 }
             }
         } catch (Exception e) {
@@ -130,6 +118,22 @@ public class SolicitudService {
         }
         
         return new SolicitudResponseDTO(saved);
+    }
+
+    public List<Solicitud> verificarConflictosPorRolYFechas(Integer empleadoId, 
+                                                           String rolEmpleado,
+                                                           java.time.LocalDate fechaInicio, 
+                                                           java.time.LocalDate fechaFin) {
+        if (fechaInicio.isAfter(fechaFin)) {
+            throw new RuntimeException("La fecha de inicio no puede ser posterior a la fecha de fin");
+        }
+        
+        return solicitudRepository.findConflictosPorRolYRangoFechas(
+            empleadoId, 
+            rolEmpleado,
+            fechaInicio, 
+            fechaFin
+        );
     }
 
     public List<Solicitud> verificarConflictosFecha(Integer empleadoId, 
@@ -150,8 +154,20 @@ public class SolicitudService {
         Empleado aprobador = empleadoRepository.findById(idAprobador)
                 .orElseThrow(() -> new RuntimeException("Empleado aprobador no encontrado"));
         
-        if (!"supervisor".equals(aprobador.getRol()) && !"admin".equals(aprobador.getRol())) {
-            throw new RuntimeException("Solo supervisores o administradores pueden gestionar solicitudes");
+        Empleado solicitante = solicitud.getEmpleado();
+        
+        if ("supervisor".equals(solicitante.getRol()) && !"admin".equals(aprobador.getRol())) {
+            throw new RuntimeException("Solo administradores pueden gestionar solicitudes de supervisores");
+        }
+        
+        if ("tecnico".equals(solicitante.getRol()) && 
+            !"supervisor".equals(aprobador.getRol()) && 
+            !"admin".equals(aprobador.getRol())) {
+            throw new RuntimeException("Solo supervisores o administradores pueden gestionar solicitudes de técnicos");
+        }
+        
+        if ("admin".equals(solicitante.getRol()) && !"admin".equals(aprobador.getRol())) {
+            throw new RuntimeException("Solo administradores pueden gestionar solicitudes de otros administradores");
         }
         
         String estadoAnterior = solicitud.getEstado();
@@ -217,7 +233,7 @@ public class SolicitudService {
 
     public SolicitudResponseDTO editarSolicitud(Integer id, Map<String, Object> payload) {
         Solicitud solicitud = solicitudRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Solicitud no encontrado"));
+                .orElseThrow(() -> new RuntimeException("Solicitud no encontrada"));
         
         if (!"pendiente".equals(solicitud.getEstado())) {
             throw new RuntimeException("Solo se pueden editar solicitudes pendientes");
@@ -267,6 +283,7 @@ public class SolicitudService {
                     Map<String, Object> item = new java.util.HashMap<>();
                     item.put("id", s.getId());
                     item.put("empleado", s.getEmpleado().getNombre());
+                    item.put("rol_solicitante", s.getEmpleado().getRol());
                     item.put("tipo", s.getTipo());
                     item.put("fecha_inicio", s.getFechaInicio().toString());
                     item.put("fecha_fin", s.getFechaFin().toString());
@@ -274,6 +291,7 @@ public class SolicitudService {
                     item.put("fecha_solicitud", s.getFechaSolicitud() != null ? 
                         s.getFechaSolicitud().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) : "");
                     item.put("aprobado_por", s.getAprobadoPor() != null ? s.getAprobadoPor().getNombre() : "");
+                    item.put("rol_aprobador", s.getAprobadoPor() != null ? s.getAprobadoPor().getRol() : "");
                     item.put("motivo", s.getMotivo());
                     return item;
                 })
@@ -286,5 +304,51 @@ public class SolicitudService {
         reporte.put("datos", datos);
         
         return reporte;
+    }
+    
+    private void notificarSupervisoresNuevaSolicitud(Empleado empleado, SolicitudRequestDTO request, 
+                                                    String fechaInicioStr, String fechaFinStr) {
+        List<Empleado> supervisores = empleadoRepository.findByRol("supervisor");
+        
+        for (Empleado supervisor : supervisores) {
+            if (supervisor.getEmail() != null && 
+                !supervisor.getEmail().trim().isEmpty() &&
+                supervisor.getUsuarioActivo() != null && 
+                supervisor.getUsuarioActivo() &&
+                !supervisor.getId().equals(empleado.getId())) {
+                
+                emailService.enviarNotificacionNuevaSolicitud(
+                    supervisor.getEmail(),
+                    supervisor.getNombre(),
+                    empleado.getNombre(),
+                    request.getTipo(),
+                    fechaInicioStr,
+                    fechaFinStr
+                );
+            }
+        }
+    }
+    
+    private void notificarAdminsNuevaSolicitud(Empleado empleado, SolicitudRequestDTO request, 
+                                              String fechaInicioStr, String fechaFinStr) {
+        List<Empleado> admins = empleadoRepository.findByRol("admin");
+        
+        for (Empleado admin : admins) {
+            if (admin.getEmail() != null && 
+                !admin.getEmail().trim().isEmpty() &&
+                admin.getUsuarioActivo() != null && 
+                admin.getUsuarioActivo() &&
+                !admin.getId().equals(empleado.getId())) {
+                
+                emailService.enviarNotificacionSolicitudSupervisor(
+                    admin.getEmail(),
+                    admin.getNombre(),
+                    empleado.getNombre(),
+                    request.getTipo(),
+                    fechaInicioStr,
+                    fechaFinStr
+                );
+            }
+        }
     }
 }

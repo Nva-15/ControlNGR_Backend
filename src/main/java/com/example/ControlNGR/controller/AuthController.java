@@ -79,7 +79,158 @@ public class AuthController {
         }
     }
 
-    // Cambiar contraseña desde perfil (con autenticación)
+    // Obtener perfil completo del usuario autenticado
+    @GetMapping("/perfil")
+    public ResponseEntity<?> obtenerPerfil(@RequestHeader("Authorization") String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "No autorizado", "success", false));
+            }
+            
+            String token = authHeader.substring(7);
+            if (!jwtUtil.validateToken(token)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Token inválido", "success", false));
+            }
+            
+            String username = jwtUtil.extractUsername(token);
+            Optional<Empleado> empleadoOpt = empleadoService.findByUsername(username);
+            
+            if (!empleadoOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Usuario no encontrado", "success", false));
+            }
+            
+            Empleado empleado = empleadoOpt.get();
+            Map<String, Object> perfil = empleadoService.obtenerPerfilCompleto(empleado.getId());
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "perfil", perfil
+            ));
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error obteniendo perfil: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al obtener perfil: " + e.getMessage(), "success", false));
+        }
+    }
+
+    // Actualizar información personal
+    @PutMapping("/perfil/actualizar")
+    public ResponseEntity<?> actualizarInformacionPersonal(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody Map<String, Object> datos) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "No autorizado", "success", false));
+            }
+            
+            String token = authHeader.substring(7);
+            if (!jwtUtil.validateToken(token)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Token inválido", "success", false));
+            }
+            
+            String username = jwtUtil.extractUsername(token);
+            Optional<Empleado> empleadoOpt = empleadoService.findByUsername(username);
+            
+            if (!empleadoOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Usuario no encontrado", "success", false));
+            }
+            
+            Empleado empleado = empleadoOpt.get();
+            Map<String, Object> resultado = empleadoService.actualizarInformacionPersonal(empleado.getId(), datos);
+            
+            return ResponseEntity.ok(resultado);
+            
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage(), "success", false));
+        } catch (Exception e) {
+            System.err.println("❌ Error actualizando información: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al actualizar información: " + e.getMessage(), "success", false));
+        }
+    }
+
+    // Cambiar contraseña
+    @PostMapping("/cambiar-password")
+    public ResponseEntity<?> cambiarPassword(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody Map<String, String> request) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "No autorizado", "success", false));
+            }
+            
+            String token = authHeader.substring(7);
+            if (!jwtUtil.validateToken(token)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Token inválido", "success", false));
+            }
+            
+            String username = jwtUtil.extractUsername(token);
+            Optional<Empleado> empleadoOpt = empleadoService.findByUsername(username);
+            
+            if (!empleadoOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Usuario no encontrado", "success", false));
+            }
+            
+            Empleado empleado = empleadoOpt.get();
+            
+            // Validar campos requeridos
+            String passwordActual = request.get("passwordActual");
+            String passwordNueva = request.get("passwordNueva");
+            String confirmarPassword = request.get("confirmarPassword");
+            
+            if (passwordActual == null || passwordActual.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "La contraseña actual es requerida", "success", false));
+            }
+            
+            if (passwordNueva == null || passwordNueva.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "La nueva contraseña es requerida", "success", false));
+            }
+            
+            // Si no viene confirmarPassword, usar passwordNueva
+            if (confirmarPassword == null) {
+                confirmarPassword = passwordNueva;
+            }
+            
+            // Verificar que las contraseñas coincidan
+            if (!passwordNueva.equals(confirmarPassword)) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Las contraseñas no coinciden", "success", false));
+            }
+            
+            // Cambiar contraseña usando el nuevo método
+            Map<String, Object> resultado = empleadoService.cambiarPasswordUsuario(
+                empleado.getId(), 
+                passwordActual, 
+                passwordNueva
+            );
+            
+            return ResponseEntity.ok(resultado);
+            
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage(), "success", false));
+        } catch (Exception e) {
+            System.err.println("❌ Error cambiando contraseña: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al cambiar contraseña: " + e.getMessage(), "success", false));
+        }
+    }
+
+    // Cambiar contraseña desde perfil
     @PostMapping("/cambiar-password-perfil")
     public ResponseEntity<?> cambiarPasswordPerfil(@RequestBody Map<String, String> request,
                                                   @RequestHeader("Authorization") String authHeader) {

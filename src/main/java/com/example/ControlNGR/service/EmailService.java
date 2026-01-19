@@ -234,4 +234,59 @@ public class EmailService {
             default: return estado;
         }
     }
+    // Notificación específica para solicitudes de supervisor   
+    public void enviarNotificacionSolicitudSupervisor(String destinatarioReal, String adminNombre, 
+        String supervisorNombre, String tipoSolicitud,
+        String fechaInicio, String fechaFin) {
+    try {
+    String tipoFormateado = formatearTipoSolicitud(tipoSolicitud);
+
+    Map<String, String> emailData = new HashMap<>();
+    emailData.put("_replyto", "sistema@controlngr.com");
+    emailData.put("_subject", "🔔 SOLICITUD DE SUPERVISOR PENDIENTE - Sistema ControlNGR");
+    emailData.put("email", destinatarioReal);
+    emailData.put("admin", adminNombre);
+    emailData.put("supervisor", supervisorNombre);
+    emailData.put("tipo", tipoFormateado);
+    emailData.put("fecha_inicio", fechaInicio);
+    emailData.put("fecha_fin", fechaFin);
+    emailData.put("message", 
+    "Hola " + adminNombre + ",\n\n" +
+    "🔔 **SOLICITUD DE SUPERVISOR REQUIERE APROBACIÓN**\n" +
+    "─────────────────────────────────────────────\n\n" +
+    "👨‍💼 **Supervisor**: " + supervisorNombre + "\n" +
+    "📋 **Tipo de Solicitud**: " + tipoFormateado + "\n" +
+    "📅 **Período Solicitado**: " + fechaInicio + " al " + fechaFin + "\n" +
+    "⏰ **Fecha de Solicitud**: " + java.time.LocalDate.now() + "\n" +
+    "⚠️ **Importante**: Solo administradores pueden aprobar solicitudes de supervisores\n\n" +
+    "─────────────────────────────────────────────\n" +
+    "📋 **ACCION REQUERIDA**\n\n" +
+    "Por favor, revise esta solicitud en el sistema:\n" +
+    "• Verifique disponibilidad del supervisor\n" +
+    "• Considere impacto en el equipo\n" +
+    "• Aprobe o rechace según corresponda\n\n" +
+    "⚠️ **NOTA IMPORTANTE**\n" +
+    "• Supervisores NO pueden auto-aprobar sus solicitudes\n" +
+    "• Solo administradores tienen permisos para esta acción\n" +
+    "• Considere cobertura del equipo durante la ausencia\n\n" +
+    "Saludos,\n" +
+    "✅ Sistema ControlNGR"
+    );
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+
+    HttpEntity<Map<String, String>> request = new HttpEntity<>(emailData, headers);
+    ResponseEntity<String> response = restTemplate.postForEntity(formspreeUrl, request, String.class);
+
+    if (response.getStatusCode() == HttpStatus.OK) {
+    System.out.println("✅ Notificación enviada a admin sobre solicitud de supervisor: " + destinatarioReal);
+    } else {
+    System.out.println("❌ Error enviando a admin " + destinatarioReal);
+    }
+
+    } catch (Exception e) {
+    System.err.println("❌ Error enviando notificación a " + destinatarioReal + ": " + e.getMessage());
+    }
+    }
 }
