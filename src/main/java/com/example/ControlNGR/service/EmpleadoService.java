@@ -31,14 +31,10 @@ public class EmpleadoService {
         if (empleadoOpt.isPresent()) {
             Empleado empleado = empleadoOpt.get();
             
-            // Verificar que el usuario esté activo en el sistema
             if (Boolean.TRUE.equals(empleado.getActivo()) &&
                 Boolean.TRUE.equals(empleado.getUsuarioActivo())) {
                 
-                // Verificar la contraseña
                 if (passwordEncoder.matches(password, empleado.getPassword())) {
-                    // PERMITIR TODOS LOS ROLES: admin, supervisor, tecnico, hd, noc
-                    // No se filtra por rol específico, todos los roles válidos pueden acceder
                     return Optional.of(empleado);
                 }
             }
@@ -46,7 +42,6 @@ public class EmpleadoService {
         return Optional.empty();
     }
     
-    // Obtener perfil completo por ID (sin datos sensibles)
     public Map<String, Object> obtenerPerfilCompleto(Integer empleadoId) {
         Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
         if (empleadoOpt.isPresent()) {
@@ -74,7 +69,6 @@ public class EmpleadoService {
         return null;
     }
     
-    // Actualizar información personal (solo campos no sensibles)
     public Map<String, Object> actualizarInformacionPersonal(Integer empleadoId, Map<String, Object> datos) {
         Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
         if (!empleadoOpt.isPresent()) {
@@ -85,7 +79,6 @@ public class EmpleadoService {
         Map<String, Object> cambios = new HashMap<>();
         boolean cambiosRealizados = false;
         
-        // Campos permitidos para edición por el usuario
         if (datos.containsKey("nombre") && datos.get("nombre") != null) {
             String nuevoNombre = ((String) datos.get("nombre")).trim();
             if (!nuevoNombre.isEmpty() && !nuevoNombre.equals(empleado.getNombre())) {
@@ -134,12 +127,10 @@ public class EmpleadoService {
             if (nuevoEmail != null && !nuevoEmail.trim().isEmpty()) {
                 String emailLimpio = nuevoEmail.trim().toLowerCase();
                 
-                // Validar formato básico de email
                 if (!emailLimpio.matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
                     throw new RuntimeException("Formato de email inválido");
                 }
                 
-                // Verificar si el email ya está en uso por otro usuario
                 Optional<Empleado> empleadoExistente = empleadoRepository.findByEmail(emailLimpio);
                 if (empleadoExistente.isPresent() && !empleadoExistente.get().getId().equals(empleadoId)) {
                     throw new RuntimeException("El email ya está registrado por otro usuario");
@@ -156,7 +147,6 @@ public class EmpleadoService {
         if (cambiosRealizados) {
             empleadoRepository.save(empleado);
             
-            // Enviar notificación por email si hay cambios
             if (empleado.getEmail() != null && !empleado.getEmail().trim().isEmpty()) {
                 try {
                     emailService.enviarNotificacionActualizacionPerfil(empleado.getEmail(), empleado.getNombre());
@@ -175,7 +165,6 @@ public class EmpleadoService {
         return resultado;
     }
     
-    // Cambiar contraseña (con validaciones mejoradas)
     public Map<String, Object> cambiarPasswordUsuario(Integer empleadoId, String passwordActual, String passwordNueva) {
         Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
         if (!empleadoOpt.isPresent()) {
@@ -185,12 +174,10 @@ public class EmpleadoService {
         Empleado empleado = empleadoOpt.get();
         Map<String, Object> resultado = new HashMap<>();
         
-        // Verificar contraseña actual
         if (!passwordEncoder.matches(passwordActual, empleado.getPassword())) {
             throw new RuntimeException("La contraseña actual es incorrecta");
         }
         
-        // Validar nueva contraseña
         if (passwordNueva == null || passwordNueva.trim().isEmpty()) {
             throw new RuntimeException("La nueva contraseña es requerida");
         }
@@ -199,16 +186,13 @@ public class EmpleadoService {
             throw new RuntimeException("La contraseña debe tener al menos 6 caracteres");
         }
         
-        // La nueva contraseña no puede ser igual a la actual
         if (passwordEncoder.matches(passwordNueva, empleado.getPassword())) {
             throw new RuntimeException("La nueva contraseña no puede ser igual a la actual");
         }
         
-        // Cambiar contraseña
         empleado.setPassword(passwordEncoder.encode(passwordNueva));
         empleadoRepository.save(empleado);
         
-        // Enviar notificación por email
         if (empleado.getEmail() != null && !empleado.getEmail().trim().isEmpty()) {
             try {
                 emailService.enviarNotificacionCambioPassword(empleado.getEmail(), empleado.getNombre());
@@ -225,7 +209,6 @@ public class EmpleadoService {
         return resultado;
     }
     
-    // Cambiar contraseña
     public boolean cambiarPassword(Integer empleadoId, String passwordActual, String passwordNueva) {
         try {
             Map<String, Object> resultado = cambiarPasswordUsuario(empleadoId, passwordActual, passwordNueva);
@@ -235,7 +218,6 @@ public class EmpleadoService {
         }
     }
     
-    // Cambiar contraseña por admin
     public boolean cambiarPasswordAdmin(Integer empleadoId, String passwordNueva) {
         Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
         if (empleadoOpt.isPresent()) {
@@ -265,17 +247,15 @@ public class EmpleadoService {
         return false;
     }
     
-    // Actualizar perfil completo
     public boolean actualizarPerfil(Integer empleadoId, Map<String, Object> datos) {
         try {
             Map<String, Object> resultado = actualizarInformacionPersonal(empleadoId, datos);
             return (Boolean) resultado.get("success");
         } catch (RuntimeException e) {
-            throw e; // Propagar la excepción
+            throw e;
         }
     }
     
-    // 
     public List<Empleado> findAll() {
         return empleadoRepository.findAll();
     }
@@ -296,42 +276,141 @@ public class EmpleadoService {
         return empleadoRepository.findByEmail(email);
     }
     
-    public Empleado save(Empleado empleado) {
-        if (empleado.getIdentificador() == null || empleado.getIdentificador().trim().isEmpty()) {
-            empleado.setIdentificador(UUID.randomUUID().toString());
+    private String generarIdentificador(String nombreCompleto) {
+        if (nombreCompleto == null || nombreCompleto.trim().isEmpty()) {
+            return UUID.randomUUID().toString();
         }
-
-        if (empleado.getPassword() != null && !empleado.getPassword().trim().isEmpty()) {
-            if (!empleado.getPassword().startsWith("$2")) {
-                empleado.setPassword(passwordEncoder.encode(empleado.getPassword()));
+        
+        String[] partes = nombreCompleto.trim().toLowerCase().split("\\s+");
+        if (partes.length >= 2) {
+            String nombre = partes[0];
+            String apellido = partes[partes.length - 1];
+            
+            nombre = nombre.replaceAll("[^a-záéíóúüñ]", "");
+            apellido = apellido.replaceAll("[^a-záéíóúüñ]", "");
+            
+            return nombre + "-" + apellido;
+        } else if (partes.length == 1) {
+            return partes[0].toLowerCase().replaceAll("[^a-záéíóúüñ]", "");
+        }
+        
+        return UUID.randomUUID().toString();
+    }
+    
+    public Empleado actualizarEmpleado(Integer id, Empleado empleadoActualizado) {
+        Optional<Empleado> empleadoExistenteOpt = empleadoRepository.findById(id);
+        if (!empleadoExistenteOpt.isPresent()) {
+            throw new RuntimeException("Empleado no encontrado");
+        }
+        
+        Empleado empleadoExistente = empleadoExistenteOpt.get();
+        
+        if (empleadoActualizado.getNombre() != null && !empleadoActualizado.getNombre().trim().isEmpty()) {
+            empleadoExistente.setNombre(empleadoActualizado.getNombre());
+        }
+        
+        if (empleadoActualizado.getCargo() != null) {
+            empleadoExistente.setCargo(empleadoActualizado.getCargo());
+        }
+        
+        if (empleadoActualizado.getNivel() != null) {
+            empleadoExistente.setNivel(empleadoActualizado.getNivel());
+        }
+        
+        if (empleadoActualizado.getEmail() != null && !empleadoActualizado.getEmail().trim().isEmpty()) {
+            empleadoExistente.setEmail(empleadoActualizado.getEmail().trim().toLowerCase());
+        }
+        
+        if (empleadoActualizado.getDescripcion() != null) {
+            empleadoExistente.setDescripcion(empleadoActualizado.getDescripcion());
+        }
+        
+        if (empleadoActualizado.getHobby() != null) {
+            empleadoExistente.setHobby(empleadoActualizado.getHobby());
+        }
+        
+        if (empleadoActualizado.getCumpleanos() != null) {
+            empleadoExistente.setCumpleanos(empleadoActualizado.getCumpleanos());
+        }
+        
+        if (empleadoActualizado.getIngreso() != null) {
+            empleadoExistente.setIngreso(empleadoActualizado.getIngreso());
+        }
+        
+        if (empleadoActualizado.getFoto() != null && !empleadoActualizado.getFoto().trim().isEmpty()) {
+            empleadoExistente.setFoto(empleadoActualizado.getFoto());
+        }
+        
+        if (empleadoActualizado.getActivo() != null) {
+            empleadoExistente.setActivo(empleadoActualizado.getActivo());
+        }
+        
+        if (empleadoActualizado.getUsuarioActivo() != null) {
+            empleadoExistente.setUsuarioActivo(empleadoActualizado.getUsuarioActivo());
+        }
+        
+        if (empleadoActualizado.getRol() != null && !empleadoActualizado.getRol().trim().isEmpty()) {
+            empleadoExistente.setRol(empleadoActualizado.getRol());
+        }
+        
+        if (empleadoActualizado.getPassword() != null && !empleadoActualizado.getPassword().trim().isEmpty()) {
+            String password = empleadoActualizado.getPassword().trim();
+            if (!password.startsWith("$2a$") && !password.startsWith("$2b$") && !password.startsWith("$2y$")) {
+                empleadoExistente.setPassword(passwordEncoder.encode(password));
+            } else {
+                empleadoExistente.setPassword(password);
             }
         }
         
-        if (empleado.getUsername() == null || empleado.getUsername().trim().isEmpty()) {
-            empleado.setUsername(empleado.getDni());
-        }
+        return empleadoRepository.save(empleadoExistente);
+    }
+    
+    public Empleado save(Empleado empleado) {
+        boolean esNuevo = empleado.getId() == null;
         
-        if (empleado.getEmail() == null || empleado.getEmail().trim().isEmpty()) {
-            String emailGenerado = empleado.getUsername() + "@ngr.com.pe";
-            empleado.setEmail(emailGenerado);
-        }
-        
-        if (empleado.getRol() == null || empleado.getRol().trim().isEmpty()) {
-            if (empleado.getNivel() != null) {
-                switch (empleado.getNivel().toLowerCase()) {
-                    case "gerente":
-                    case "jefe":
-                        empleado.setRol("admin");
-                        break;
-                    case "supervisor":
-                        empleado.setRol("supervisor");
-                        break;
-                    default:
-                        empleado.setRol("tecnico");
+        if (esNuevo) {
+            if (empleado.getIdentificador() == null || empleado.getIdentificador().trim().isEmpty()) {
+                empleado.setIdentificador(generarIdentificador(empleado.getNombre()));
+            }
+            
+            if (empleado.getUsername() == null || empleado.getUsername().trim().isEmpty()) {
+                empleado.setUsername(empleado.getDni());
+            }
+            
+            if (empleado.getEmail() == null || empleado.getEmail().trim().isEmpty()) {
+                String emailGenerado = empleado.getUsername() + "@ngr.com.pe";
+                empleado.setEmail(emailGenerado);
+            }
+            
+            if (empleado.getRol() == null || empleado.getRol().trim().isEmpty()) {
+                if (empleado.getNivel() != null) {
+                    switch (empleado.getNivel().toLowerCase()) {
+                        case "gerente":
+                        case "jefe":
+                            empleado.setRol("admin");
+                            break;
+                        case "supervisor":
+                            empleado.setRol("supervisor");
+                            break;
+                        default:
+                            empleado.setRol("tecnico");
+                    }
+                } else {
+                    empleado.setRol("tecnico");
+                }
+            }
+            
+            if (empleado.getPassword() != null && !empleado.getPassword().trim().isEmpty()) {
+                String password = empleado.getPassword().trim();
+                if (!password.startsWith("$2a$") && !password.startsWith("$2b$") && !password.startsWith("$2y$")) {
+                    empleado.setPassword(passwordEncoder.encode(password));
                 }
             } else {
-                empleado.setRol("tecnico");
+                empleado.setPassword(passwordEncoder.encode("password"));
             }
+            
+        } else {
+            return actualizarEmpleado(empleado.getId(), empleado);
         }
         
         return empleadoRepository.save(empleado);

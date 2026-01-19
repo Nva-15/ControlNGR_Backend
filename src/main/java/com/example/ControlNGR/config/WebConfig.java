@@ -24,23 +24,24 @@ public class WebConfig implements WebMvcConfigurer {
     }
     
     @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // 1. Configuración para servir archivos estáticos del propio JAR (Frontend, CSS, JS)
-        registry.addResourceHandler("/**")
-                .addResourceLocations(
-                    "classpath:/static/",
-                    "classpath:/public/",
-                    "classpath:/resources/",
-                    "classpath:/META-INF/resources/"
-                )
-                .setCachePeriod(0);
-        
-        // 2. Configuración para servir imágenes desde la RUTA EXTERNA
-        // Esto mapea http://localhost:8080/img/foto.png -> D:/Mis Proyectos personales/img/foto.png
-        System.out.println("📂 Mapeando /img/** a: " + storageLocation); // Log para verificar
-        
-        registry.addResourceHandler("/img/**")
-                .addResourceLocations(storageLocation)
-                .setCachePeriod(0); // Sin caché para desarrollo (puedes quitarlo en prod)
-    }
+public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    //Configuración para servir archivos estáticos del propio JAR
+    registry.addResourceHandler("/**")
+            .addResourceLocations(
+                "classpath:/static/",
+                "classpath:/public/",
+                "classpath:/resources/",
+                "classpath:/META-INF/resources/"
+            )
+            .setCachePeriod(0);
+    
+    // 2. Configuración para servir imágenes desde la RUTA EXTERNA
+    // Eliminar "file:///" del path para Spring
+    String rutaLocal = storageLocation.replace("file:///", "");
+    System.out.println("📂 Mapeando /img/** a: " + rutaLocal);
+    
+    registry.addResourceHandler("/img/**")
+            .addResourceLocations("file:" + rutaLocal)
+            .setCachePeriod(0);
+}
 }

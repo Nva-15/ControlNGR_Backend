@@ -123,7 +123,7 @@ public class EmpleadoController {
         }
     }
     
-    // NUEVOS ENDPOINTS PARA ACTUALIZAR PERFIL
+    // ENDPOINTS PARA ACTUALIZAR PERFIL
     
     @PutMapping("/actualizar-perfil/{id}")
     public ResponseEntity<?> actualizarPerfil(@PathVariable("id") Integer id, @RequestBody Map<String, Object> datos) {
@@ -228,6 +228,44 @@ public class EmpleadoController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error al exportar empleados: " + e.getMessage()));
+        }
+    }
+    
+    // Endpoint para cambiar estado del usuario
+    @PatchMapping("/{id}/estado")
+    public ResponseEntity<?> cambiarEstadoUsuario(
+            @PathVariable("id") Integer id,
+            @RequestBody Map<String, Boolean> estado) {
+        
+        try {
+            Optional<Empleado> empleadoOpt = empleadoService.findById(id);
+            if (!empleadoOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Empleado no encontrado", "success", false));
+            }
+            
+            Empleado empleado = empleadoOpt.get();
+            
+            // Actualizar ambos estados si están presentes
+            if (estado.containsKey("usuarioActivo")) {
+                empleado.setUsuarioActivo(estado.get("usuarioActivo"));
+            }
+            if (estado.containsKey("activo")) {
+                empleado.setActivo(estado.get("activo"));
+            }
+            
+            empleadoService.save(empleado);
+            
+            return ResponseEntity.ok(Map.of(
+                "message", "Estado actualizado correctamente",
+                "success", true,
+                "usuarioActivo", empleado.getUsuarioActivo(),
+                "activo", empleado.getActivo()
+            ));
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al actualizar estado: " + e.getMessage(), "success", false));
         }
     }
 }
