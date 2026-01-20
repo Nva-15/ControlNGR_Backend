@@ -305,60 +305,117 @@ public class EmpleadoService {
         
         Empleado empleadoExistente = empleadoExistenteOpt.get();
         
-        if (empleadoActualizado.getNombre() != null && !empleadoActualizado.getNombre().trim().isEmpty()) {
-            empleadoExistente.setNombre(empleadoActualizado.getNombre());
+        // NUEVA LÓGICA: Solo actualizar campos que vienen con valor REAL
+        // NO actualizar si viene nulo, vacío o con valor por defecto
+        
+        // Nombre: solo si viene con valor real
+        if (empleadoActualizado.getNombre() != null && 
+            !empleadoActualizado.getNombre().trim().isEmpty() &&
+            !empleadoActualizado.getNombre().equals(empleadoExistente.getNombre())) {
+            empleadoExistente.setNombre(empleadoActualizado.getNombre().trim());
         }
         
-        if (empleadoActualizado.getCargo() != null) {
-            empleadoExistente.setCargo(empleadoActualizado.getCargo());
+        // Cargo: solo si viene con valor real
+        if (empleadoActualizado.getCargo() != null && 
+            !empleadoActualizado.getCargo().trim().isEmpty() &&
+            !empleadoActualizado.getCargo().equals(empleadoExistente.getCargo())) {
+            empleadoExistente.setCargo(empleadoActualizado.getCargo().trim());
         }
         
-        if (empleadoActualizado.getNivel() != null) {
+        // Nivel: solo si viene con valor real
+        if (empleadoActualizado.getNivel() != null && 
+            !empleadoActualizado.getNivel().trim().isEmpty() &&
+            !empleadoActualizado.getNivel().equals(empleadoExistente.getNivel())) {
             empleadoExistente.setNivel(empleadoActualizado.getNivel());
         }
         
-        if (empleadoActualizado.getEmail() != null && !empleadoActualizado.getEmail().trim().isEmpty()) {
-            empleadoExistente.setEmail(empleadoActualizado.getEmail().trim().toLowerCase());
+        // Email: solo si viene con valor real y válido
+        if (empleadoActualizado.getEmail() != null && 
+            !empleadoActualizado.getEmail().trim().isEmpty() &&
+            !empleadoActualizado.getEmail().trim().toLowerCase().equals(empleadoExistente.getEmail())) {
+            
+            String emailLimpio = empleadoActualizado.getEmail().trim().toLowerCase();
+            
+            // Validar formato básico
+            if (emailLimpio.contains("@") && emailLimpio.contains(".")) {
+                // Verificar si no está usado por otro
+                Optional<Empleado> empleadoConEmail = empleadoRepository.findByEmail(emailLimpio);
+                if (!empleadoConEmail.isPresent() || empleadoConEmail.get().getId().equals(id)) {
+                    empleadoExistente.setEmail(emailLimpio);
+                }
+            }
         }
         
+        // Descripción: manejar nulos explícitos
         if (empleadoActualizado.getDescripcion() != null) {
-            empleadoExistente.setDescripcion(empleadoActualizado.getDescripcion());
+            if (!empleadoActualizado.getDescripcion().equals(empleadoExistente.getDescripcion())) {
+                empleadoExistente.setDescripcion(empleadoActualizado.getDescripcion());
+            }
         }
         
+        // Hobby: manejar nulos explícitos
         if (empleadoActualizado.getHobby() != null) {
-            empleadoExistente.setHobby(empleadoActualizado.getHobby());
+            if (!empleadoActualizado.getHobby().equals(empleadoExistente.getHobby())) {
+                empleadoExistente.setHobby(empleadoActualizado.getHobby());
+            }
         }
         
-        if (empleadoActualizado.getCumpleanos() != null) {
+        // Fechas: solo si vienen con valor real
+        if (empleadoActualizado.getCumpleanos() != null &&
+            !empleadoActualizado.getCumpleanos().equals(empleadoExistente.getCumpleanos())) {
             empleadoExistente.setCumpleanos(empleadoActualizado.getCumpleanos());
         }
         
-        if (empleadoActualizado.getIngreso() != null) {
+        if (empleadoActualizado.getIngreso() != null &&
+            !empleadoActualizado.getIngreso().equals(empleadoExistente.getIngreso())) {
             empleadoExistente.setIngreso(empleadoActualizado.getIngreso());
         }
         
-        if (empleadoActualizado.getFoto() != null && !empleadoActualizado.getFoto().trim().isEmpty()) {
+        // CRÍTICO: Foto - SOLO actualizar si viene con valor diferente a "img/perfil.png"
+        if (empleadoActualizado.getFoto() != null && 
+            !empleadoActualizado.getFoto().trim().isEmpty() &&
+            !empleadoActualizado.getFoto().equals("img/perfil.png") &&
+            !empleadoActualizado.getFoto().equals(empleadoExistente.getFoto())) {
             empleadoExistente.setFoto(empleadoActualizado.getFoto());
         }
         
-        if (empleadoActualizado.getActivo() != null) {
+        // Estado: siempre actualizar si viene (puede ser false explícito)
+        if (empleadoActualizado.getActivo() != null &&
+            !empleadoActualizado.getActivo().equals(empleadoExistente.getActivo())) {
             empleadoExistente.setActivo(empleadoActualizado.getActivo());
         }
         
-        if (empleadoActualizado.getUsuarioActivo() != null) {
+        if (empleadoActualizado.getUsuarioActivo() != null &&
+            !empleadoActualizado.getUsuarioActivo().equals(empleadoExistente.getUsuarioActivo())) {
             empleadoExistente.setUsuarioActivo(empleadoActualizado.getUsuarioActivo());
         }
         
-        if (empleadoActualizado.getRol() != null && !empleadoActualizado.getRol().trim().isEmpty()) {
+        // CRÍTICO: Rol - SOLO actualizar si Admin lo cambia explícitamente
+        // Nunca cambiar a "tecnico" automáticamente
+        if (empleadoActualizado.getRol() != null && 
+            !empleadoActualizado.getRol().trim().isEmpty() &&
+            !empleadoActualizado.getRol().equals("tecnico") &&  // ← Ignorar valor por defecto
+            !empleadoActualizado.getRol().equals(empleadoExistente.getRol())) {
+            
+            // Aquí podrías agregar lógica de permisos: solo admin puede cambiar roles
             empleadoExistente.setRol(empleadoActualizado.getRol());
         }
         
-        if (empleadoActualizado.getPassword() != null && !empleadoActualizado.getPassword().trim().isEmpty()) {
+        // Password: solo si viene con valor y no está encriptado ya
+        if (empleadoActualizado.getPassword() != null && 
+            !empleadoActualizado.getPassword().trim().isEmpty()) {
+            
             String password = empleadoActualizado.getPassword().trim();
-            if (!password.startsWith("$2a$") && !password.startsWith("$2b$") && !password.startsWith("$2y$")) {
-                empleadoExistente.setPassword(passwordEncoder.encode(password));
-            } else {
-                empleadoExistente.setPassword(password);
+            
+            // Verificar si NO es una contraseña ya encriptada
+            if (!password.startsWith("$2a$") && 
+                !password.startsWith("$2b$") && 
+                !password.startsWith("$2y$")) {
+                
+                // Solo actualizar si es diferente a la actual
+                if (!passwordEncoder.matches(password, empleadoExistente.getPassword())) {
+                    empleadoExistente.setPassword(passwordEncoder.encode(password));
+                }
             }
         }
         
