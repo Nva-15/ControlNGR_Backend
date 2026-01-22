@@ -79,14 +79,11 @@ public class EmpleadoController {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "Empleado no encontrado"));
             }
-            Empleado empleado = empleadoOpt.get();
-            empleado.setActivo(false);
-            empleado.setUsuarioActivo(false);
-            empleadoService.save(empleado);
-            return ResponseEntity.ok(Map.of("message", "Empleado desactivado correctamente"));
+            empleadoService.deleteById(id);
+            return ResponseEntity.ok(Map.of("message", "Empleado eliminado permanentemente"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error al eliminar empleado"));
+                    .body(Map.of("error", "Error al eliminar empleado: " + e.getMessage()));
         }
     }
     
