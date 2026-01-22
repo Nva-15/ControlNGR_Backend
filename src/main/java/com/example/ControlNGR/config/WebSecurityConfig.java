@@ -62,18 +62,22 @@ public class WebSecurityConfig {
                 // Endpoints públicos de API
                 .requestMatchers("/api/auth/**").permitAll()
                 
-             // VER empleados (Organigrama / Listado)
+             // VER empleados (Organigrama / Listado) - Todos los roles
                 .requestMatchers(HttpMethod.GET, "/api/empleados/**")
-                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO")
-                
-                // Endpoints protegidos por Rol
+                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
+
+                // Subir imágenes de perfil - Todos los usuarios autenticados
+                .requestMatchers("/api/imagenes/**")
+                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
+
+                // Endpoints protegidos por Rol (CRUD empleados)
                 .requestMatchers("/api/empleados/**", "/api/horarios/**")
                     .hasAnyRole("ADMIN", "SUPERVISOR")
-                
+
                 .requestMatchers("/api/asistencia/**", "/api/solicitudes/**")
-                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO")
+                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
                 .requestMatchers("/api/solicitudes/exportar/**")
-                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO")
+                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
                 
                 // El resto requiere autenticación
                 .anyRequest().authenticated()
