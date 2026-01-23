@@ -56,35 +56,171 @@ public class EmpleadoController {
     }
     
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateEmpleado(@PathVariable("id") Integer id, @RequestBody Empleado empleado) {
+    public ResponseEntity<?> updateEmpleado(
+            @PathVariable("id") Integer id,
+            @RequestBody Empleado empleado,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
-            if (!empleadoService.findById(id).isPresent()) {
+            // Obtener el usuario que hace la petición
+            String token = (authHeader != null && authHeader.startsWith("Bearer ")) ? authHeader.substring(7) : null;
+            if (token == null) {
+                // Sin token, permitir actualización sin validación de permisos (comportamiento anterior)
+                System.out.println("⚠️ PUT /empleados/" + id + " sin token - ejecutando sin validación de permisos");
+                if (!empleadoService.findById(id).isPresent()) {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                            .body(Map.of("error", "Empleado no encontrado"));
+                }
+                empleado.setId(id);
+                Empleado empleadoActualizado = empleadoService.save(empleado);
+                return ResponseEntity.ok(empleadoActualizado);
+            }
+
+            String username = jwtUtil.extractUsername(token);
+            Optional<Empleado> editorOpt = empleadoService.findByUsername(username);
+            if (!editorOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Usuario no encontrado"));
+            }
+
+            Empleado editor = editorOpt.get();
+            String rolEditor = editor.getRol();
+
+            Optional<Empleado> empleadoObjetivoOpt = empleadoService.findById(id);
+            if (!empleadoObjetivoOpt.isPresent()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "Empleado no encontrado"));
             }
+
+            Empleado empleadoObjetivo = empleadoObjetivoOpt.get();
+            String rolObjetivo = empleadoObjetivo.getRol();
+
+            // Validar permisos de edición
+            if (!puedeEditarEmpleado(editor, empleadoObjetivo)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "No tiene permisos para editar este empleado"));
+            }
+
             empleado.setId(id);
             Empleado empleadoActualizado = empleadoService.save(empleado);
             return ResponseEntity.ok(empleadoActualizado);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error al actualizar empleado"));
+                    .body(Map.of("error", "Error al actualizar empleado: " + e.getMessage()));
         }
+    }
+
+    // Método para verificar permisos de edición
+    private boolean puedeEditarEmpleado(Empleado editor, Empleado objetivo) {
+        String rolEditor = editor.getRol();
+        String rolObjetivo = objetivo.getRol();
+        boolean esMismoPerfil = editor.getId().equals(objetivo.getId());
+
+        // Admin puede editar a todos
+        if ("admin".equals(rolEditor)) {
+            return true;
+        }
+
+        // Supervisor puede editar:
+        if ("supervisor".equals(rolEditor)) {
+            // - Su propio perfil
+            if (esMismoPerfil) {
+                return true;
+            }
+            // - Técnicos, HD, NOC
+            if ("tecnico".equals(rolObjetivo) || "hd".equals(rolObjetivo) || "noc".equals(rolObjetivo)) {
+                return true;
+            }
+            // - NO puede editar otros supervisores ni admins
+            return false;
+        }
+
+        // Otros roles solo pueden editar su propio perfil
+        return esMismoPerfil;
     }
     
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteEmpleado(@PathVariable("id") Integer id) {
+    public ResponseEntity<?> deleteEmpleado(
+            @PathVariable("id") Integer id,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
+            // Obtener el usuario que hace la petición
+            String token = (authHeader != null && authHeader.startsWith("Bearer ")) ? authHeader.substring(7) : null;
+            if (token == null) {
+                // Sin token, ejecutar sin validación de permisos (comportamiento anterior)
+                System.out.println("⚠️ DELETE /empleados/" + id + " sin token");
+                Optional<Empleado> empleadoOpt = empleadoService.findById(id);
+                if (!empleadoOpt.isPresent()) {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                            .body(Map.of("error", "Empleado no encontrado"));
+                }
+                empleadoService.deleteById(id);
+                return ResponseEntity.ok(Map.of("message", "Empleado eliminado permanentemente"));
+            }
+
+            String username = jwtUtil.extractUsername(token);
+            Optional<Empleado> editorOpt = empleadoService.findByUsername(username);
+            if (!editorOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Usuario no encontrado"));
+            }
+
+            Empleado editor = editorOpt.get();
+
             Optional<Empleado> empleadoOpt = empleadoService.findById(id);
             if (!empleadoOpt.isPresent()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "Empleado no encontrado"));
             }
+
+            Empleado empleadoObjetivo = empleadoOpt.get();
+
+            // Un admin o supervisor NO puede eliminarse a sí mismo
+            if (editor.getId().equals(id)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "No puede eliminarse a sí mismo"));
+            }
+
+            // Validar permisos de eliminación
+            if (!puedeEliminarEmpleado(editor, empleadoObjetivo)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "No tiene permisos para eliminar este empleado"));
+            }
+
             empleadoService.deleteById(id);
             return ResponseEntity.ok(Map.of("message", "Empleado eliminado permanentemente"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error al eliminar empleado: " + e.getMessage()));
         }
+    }
+
+    // Método para verificar permisos de eliminación
+    private boolean puedeEliminarEmpleado(Empleado editor, Empleado objetivo) {
+        String rolEditor = editor.getRol();
+        String rolObjetivo = objetivo.getRol();
+
+        // Nadie puede eliminarse a sí mismo
+        if (editor.getId().equals(objetivo.getId())) {
+            return false;
+        }
+
+        // Admin puede eliminar a todos (excepto a sí mismo - ya validado arriba)
+        if ("admin".equals(rolEditor)) {
+            return true;
+        }
+
+        // Supervisor puede eliminar:
+        if ("supervisor".equals(rolEditor)) {
+            // - Técnicos, HD, NOC
+            if ("tecnico".equals(rolObjetivo) || "hd".equals(rolObjetivo) || "noc".equals(rolObjetivo)) {
+                return true;
+            }
+            // - NO puede eliminar otros supervisores ni admins
+            return false;
+        }
+
+        // Otros roles no pueden eliminar a nadie
+        return false;
     }
     
     @GetMapping("/buscar")
@@ -232,17 +368,72 @@ public class EmpleadoController {
     @PatchMapping("/{id}/estado")
     public ResponseEntity<?> cambiarEstadoUsuario(
             @PathVariable("id") Integer id,
-            @RequestBody Map<String, Boolean> estado) {
-        
+            @RequestBody Map<String, Boolean> estado,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+
         try {
+            // Obtener el usuario que hace la petición
+            String token = (authHeader != null && authHeader.startsWith("Bearer ")) ? authHeader.substring(7) : null;
+            if (token == null) {
+                // Sin token, ejecutar sin validación (comportamiento anterior)
+                System.out.println("⚠️ PATCH /empleados/" + id + "/estado sin token");
+                Optional<Empleado> empleadoOpt = empleadoService.findById(id);
+                if (!empleadoOpt.isPresent()) {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                            .body(Map.of("error", "Empleado no encontrado", "success", false));
+                }
+                Empleado empleado = empleadoOpt.get();
+                if (estado.containsKey("usuarioActivo")) {
+                    empleado.setUsuarioActivo(estado.get("usuarioActivo"));
+                }
+                if (estado.containsKey("activo")) {
+                    empleado.setActivo(estado.get("activo"));
+                }
+                empleadoService.save(empleado);
+                return ResponseEntity.ok(Map.of(
+                    "message", "Estado actualizado correctamente",
+                    "success", true,
+                    "usuarioActivo", empleado.getUsuarioActivo(),
+                    "activo", empleado.getActivo()
+                ));
+            }
+
+            String username = jwtUtil.extractUsername(token);
+            Optional<Empleado> editorOpt = empleadoService.findByUsername(username);
+            if (!editorOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Usuario no encontrado", "success", false));
+            }
+
+            Empleado editor = editorOpt.get();
+
             Optional<Empleado> empleadoOpt = empleadoService.findById(id);
             if (!empleadoOpt.isPresent()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "Empleado no encontrado", "success", false));
             }
-            
-            Empleado empleado = empleadoOpt.get();
-            
+
+            Empleado empleadoObjetivo = empleadoOpt.get();
+
+            // Un admin o supervisor NO puede desactivarse a sí mismo
+            if (editor.getId().equals(id)) {
+                // Verificar si intenta desactivarse
+                Boolean intentaDesactivar = estado.getOrDefault("usuarioActivo", true) == false ||
+                                            estado.getOrDefault("activo", true) == false;
+                if (intentaDesactivar) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(Map.of("error", "No puede desactivarse a sí mismo", "success", false));
+                }
+            }
+
+            // Validar permisos
+            if (!puedeModificarEstado(editor, empleadoObjetivo)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "No tiene permisos para modificar el estado de este empleado", "success", false));
+            }
+
+            Empleado empleado = empleadoObjetivo;
+
             // Actualizar ambos estados si están presentes
             if (estado.containsKey("usuarioActivo")) {
                 empleado.setUsuarioActivo(estado.get("usuarioActivo"));
@@ -250,19 +441,96 @@ public class EmpleadoController {
             if (estado.containsKey("activo")) {
                 empleado.setActivo(estado.get("activo"));
             }
-            
+
             empleadoService.save(empleado);
-            
+
             return ResponseEntity.ok(Map.of(
                 "message", "Estado actualizado correctamente",
                 "success", true,
                 "usuarioActivo", empleado.getUsuarioActivo(),
                 "activo", empleado.getActivo()
             ));
-            
+
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error al actualizar estado: " + e.getMessage(), "success", false));
+        }
+    }
+
+    // Método para verificar permisos de modificación de estado
+    private boolean puedeModificarEstado(Empleado editor, Empleado objetivo) {
+        String rolEditor = editor.getRol();
+        String rolObjetivo = objetivo.getRol();
+
+        // Admin puede modificar estado de todos (excepto desactivarse a sí mismo - ya validado)
+        if ("admin".equals(rolEditor)) {
+            return true;
+        }
+
+        // Supervisor puede modificar estado de:
+        if ("supervisor".equals(rolEditor)) {
+            // - Técnicos, HD, NOC
+            if ("tecnico".equals(rolObjetivo) || "hd".equals(rolObjetivo) || "noc".equals(rolObjetivo)) {
+                return true;
+            }
+            // - NO puede modificar estado de otros supervisores ni admins
+            return false;
+        }
+
+        // Otros roles no pueden modificar estados
+        return false;
+    }
+
+    // Endpoint para verificar permisos (útil para el frontend)
+    @GetMapping("/permisos/{idObjetivo}")
+    public ResponseEntity<?> verificarPermisos(
+            @PathVariable("idObjetivo") Integer idObjetivo,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+
+        try {
+            String token = (authHeader != null && authHeader.startsWith("Bearer ")) ? authHeader.substring(7) : null;
+            if (token == null) {
+                // Sin token, retornar permisos básicos
+                return ResponseEntity.ok(Map.of(
+                    "puedeEditar", true,
+                    "puedeEliminar", true,
+                    "puedeDesactivar", true,
+                    "esMismoPerfil", false,
+                    "rolEditor", "unknown",
+                    "rolObjetivo", "unknown"
+                ));
+            }
+
+            String username = jwtUtil.extractUsername(token);
+            Optional<Empleado> editorOpt = empleadoService.findByUsername(username);
+            if (!editorOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Usuario no encontrado"));
+            }
+
+            Empleado editor = editorOpt.get();
+
+            Optional<Empleado> objetivoOpt = empleadoService.findById(idObjetivo);
+            if (!objetivoOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Empleado objetivo no encontrado"));
+            }
+
+            Empleado objetivo = objetivoOpt.get();
+            boolean esMismoPerfil = editor.getId().equals(objetivo.getId());
+
+            return ResponseEntity.ok(Map.of(
+                "puedeEditar", puedeEditarEmpleado(editor, objetivo),
+                "puedeEliminar", !esMismoPerfil && puedeEliminarEmpleado(editor, objetivo),
+                "puedeDesactivar", !esMismoPerfil && puedeModificarEstado(editor, objetivo),
+                "esMismoPerfil", esMismoPerfil,
+                "rolEditor", editor.getRol(),
+                "rolObjetivo", objetivo.getRol()
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al verificar permisos: " + e.getMessage()));
         }
     }
 }

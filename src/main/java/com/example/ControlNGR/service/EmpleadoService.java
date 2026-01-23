@@ -89,19 +89,27 @@ public class EmpleadoService {
         }
         
         if (datos.containsKey("descripcion")) {
-            String nuevaDescripcion = (String) datos.get("descripcion");
-            if (nuevaDescripcion != null && !nuevaDescripcion.equals(empleado.getDescripcion())) {
-                empleado.setDescripcion(nuevaDescripcion);
-                cambios.put("descripcion", nuevaDescripcion);
+            Object descObj = datos.get("descripcion");
+            String nuevaDescripcion = descObj != null ? ((String) descObj).trim() : "";
+            String actualDescripcion = empleado.getDescripcion() != null ? empleado.getDescripcion() : "";
+
+            if (!nuevaDescripcion.equals(actualDescripcion)) {
+                // Guardar null si está vacío para limpiar el campo
+                empleado.setDescripcion(nuevaDescripcion.isEmpty() ? null : nuevaDescripcion);
+                cambios.put("descripcion", nuevaDescripcion.isEmpty() ? "(eliminado)" : nuevaDescripcion);
                 cambiosRealizados = true;
             }
         }
-        
+
         if (datos.containsKey("hobby")) {
-            String nuevoHobby = (String) datos.get("hobby");
-            if (nuevoHobby != null && !nuevoHobby.equals(empleado.getHobby())) {
-                empleado.setHobby(nuevoHobby);
-                cambios.put("hobby", nuevoHobby);
+            Object hobbyObj = datos.get("hobby");
+            String nuevoHobby = hobbyObj != null ? ((String) hobbyObj).trim() : "";
+            String actualHobby = empleado.getHobby() != null ? empleado.getHobby() : "";
+
+            if (!nuevoHobby.equals(actualHobby)) {
+                // Guardar null si está vacío para limpiar el campo
+                empleado.setHobby(nuevoHobby.isEmpty() ? null : nuevoHobby);
+                cambios.put("hobby", nuevoHobby.isEmpty() ? "(eliminado)" : nuevoHobby);
                 cambiosRealizados = true;
             }
         }
@@ -346,17 +354,25 @@ public class EmpleadoService {
             }
         }
         
-        // Descripción: manejar nulos explícitos
+        // Descripción: aceptar string vacío para limpiar el campo
+        // Si viene con valor (incluso vacío), actualizar
         if (empleadoActualizado.getDescripcion() != null) {
-            if (!empleadoActualizado.getDescripcion().equals(empleadoExistente.getDescripcion())) {
-                empleadoExistente.setDescripcion(empleadoActualizado.getDescripcion());
+            String nuevaDesc = empleadoActualizado.getDescripcion().trim();
+            String actualDesc = empleadoExistente.getDescripcion() != null ? empleadoExistente.getDescripcion() : "";
+            if (!nuevaDesc.equals(actualDesc)) {
+                // Si viene vacío, guardar null en BD para limpiar
+                empleadoExistente.setDescripcion(nuevaDesc.isEmpty() ? null : nuevaDesc);
             }
         }
-        
-        // Hobby: manejar nulos explícitos
+
+        // Hobby: aceptar string vacío para limpiar el campo
+        // Si viene con valor (incluso vacío), actualizar
         if (empleadoActualizado.getHobby() != null) {
-            if (!empleadoActualizado.getHobby().equals(empleadoExistente.getHobby())) {
-                empleadoExistente.setHobby(empleadoActualizado.getHobby());
+            String nuevoHobby = empleadoActualizado.getHobby().trim();
+            String actualHobby = empleadoExistente.getHobby() != null ? empleadoExistente.getHobby() : "";
+            if (!nuevoHobby.equals(actualHobby)) {
+                // Si viene vacío, guardar null en BD para limpiar
+                empleadoExistente.setHobby(nuevoHobby.isEmpty() ? null : nuevoHobby);
             }
         }
         
