@@ -28,75 +28,41 @@ public class SolicitudService {
     
     public boolean puedeEditarSolicitud(Integer solicitudId, Integer empleadoId, String rolEmpleado) {
         Optional<Solicitud> solicitudOpt = solicitudRepository.findById(solicitudId);
-        Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
-        
-        if (!solicitudOpt.isPresent() || !empleadoOpt.isPresent()) {
+
+        if (!solicitudOpt.isPresent()) {
             return false;
         }
-        
+
         Solicitud solicitud = solicitudOpt.get();
-        Empleado empleado = empleadoOpt.get();
         boolean esMiSolicitud = solicitud.getEmpleado().getId().equals(empleadoId);
-        String rolSolicitud = solicitud.getEmpleado().getRol();
-        
-        if ("pendiente".equals(solicitud.getEstado())) {
-            switch (rolSolicitud) {
-                case "tecnico":
-                case "hd":
-                case "noc":
-                    return esMiSolicitud || "supervisor".equals(rolEmpleado) || "admin".equals(rolEmpleado);
-                case "supervisor":
-                    return esMiSolicitud || "admin".equals(rolEmpleado);
-                case "admin":
-                    return "admin".equals(rolEmpleado);
-                default:
-                    return esMiSolicitud || "admin".equals(rolEmpleado);
-            }
-        }
-        
-        if (Arrays.asList("aprobada", "rechazada", "cancelada").contains(solicitud.getEstado())) {
-            if (esMiSolicitud) {
-                return false;
-            }
-            
-            switch (rolSolicitud) {
-                case "tecnico":
-                case "hd":
-                case "noc":
-                    return "supervisor".equals(rolEmpleado) || "admin".equals(rolEmpleado);
-                case "supervisor":
-                    return "admin".equals(rolEmpleado);
-                case "admin":
-                    return "admin".equals(rolEmpleado);
-                default:
-                    return "admin".equals(rolEmpleado);
-            }
-        }
-        
-        return false;
+
+        // Solo el dueño puede editar su solicitud y solo si está pendiente
+        return esMiSolicitud && "pendiente".equals(solicitud.getEstado());
     }
     
     public boolean puedeGestionarSolicitud(Integer solicitudId, Integer empleadoId, String rolEmpleado, String accion) {
         Optional<Solicitud> solicitudOpt = solicitudRepository.findById(solicitudId);
         Optional<Empleado> empleadoOpt = empleadoRepository.findById(empleadoId);
-        
+
         if (!solicitudOpt.isPresent() || !empleadoOpt.isPresent()) {
             return false;
         }
-        
+
         Solicitud solicitud = solicitudOpt.get();
         Empleado empleado = empleadoOpt.get();
         boolean esMiSolicitud = solicitud.getEmpleado().getId().equals(empleadoId);
         String rolSolicitud = solicitud.getEmpleado().getRol();
-        
+
+        // No puede gestionar su propia solicitud
         if (esMiSolicitud) {
             return false;
         }
-        
-        if (!"pendiente".equals(solicitud.getEstado())) {
+
+        // Permitir gestionar solicitudes pendientes, aprobadas o rechazadas (para correcciones)
+        if (!Arrays.asList("pendiente", "aprobado", "rechazado").contains(solicitud.getEstado())) {
             return false;
         }
-        
+
         switch (rolSolicitud) {
             case "tecnico":
             case "hd":
@@ -114,39 +80,56 @@ public class SolicitudService {
     public SolicitudResponseDTO gestionarSolicitud(Integer id, String estado, Integer idAprobador, String comentarios) {
         Optional<Solicitud> solicitudOpt = solicitudRepository.findById(id);
         Optional<Empleado> aprobadorOpt = empleadoRepository.findById(idAprobador);
-        
+
         if (!solicitudOpt.isPresent()) {
             throw new RuntimeException("Solicitud no encontrada");
         }
-        
+
         if (!aprobadorOpt.isPresent()) {
             throw new RuntimeException("Aprobador no encontrado");
         }
-        
+
         Solicitud solicitud = solicitudOpt.get();
         Empleado aprobador = aprobadorOpt.get();
-        
+
         if (!puedeGestionarSolicitud(id, idAprobador, aprobador.getRol(), estado)) {
             throw new RuntimeException("No tiene permisos para gestionar esta solicitud");
         }
-        
+
         if (solicitud.getEmpleado().getId().equals(idAprobador)) {
             throw new RuntimeException("No puede aprobar/rechazar su propia solicitud");
         }
-        
+
         if (!Arrays.asList("aprobado", "rechazado").contains(estado.toLowerCase())) {
             throw new RuntimeException("Estado inválido para gestión");
         }
-        
+
+        // Verificar si es una corrección de estado (ya estaba aprobado o rechazado)
+        String estadoAnterior = solicitud.getEstado();
+        boolean esCorreccion = Arrays.asList("aprobado", "rechazado").contains(estadoAnterior);
+
         solicitud.setEstado(estado.toLowerCase());
         solicitud.setAprobadoPor(aprobador);
         solicitud.setFechaAprobacion(LocalDateTime.now());
-        
-        if (comentarios != null && !comentarios.trim().isEmpty()) {
+
+        // Agregar nota de corrección si aplica
+        if (esCorreccion && !estadoAnterior.equals(estado.toLowerCase())) {
+            String motivoActual = solicitud.getMotivo() != null ? solicitud.getMotivo() : "";
+
+            // Limpiar notas de corrección anteriores
+            if (motivoActual.contains("[Estado corregido")) {
+                motivoActual = motivoActual.split("\\[Estado corregido")[0].trim();
+            }
+
+            String notaCorreccion = "\n\n[Estado corregido por " + aprobador.getNombre() +
+                                   " - " + LocalDateTime.now().format(AUDIT_FORMATTER) +
+                                   "] De " + estadoAnterior.toUpperCase() + " a " + estado.toUpperCase();
+            solicitud.setMotivo(motivoActual + notaCorreccion);
+        } else if (comentarios != null && !comentarios.trim().isEmpty()) {
             String motivoActual = solicitud.getMotivo() != null ? solicitud.getMotivo() : "";
             solicitud.setMotivo(motivoActual + "\n\nComentarios de gestión: " + comentarios);
         }
-        
+
         Solicitud savedSolicitud = solicitudRepository.save(solicitud);
         return new SolicitudResponseDTO(savedSolicitud);
     }
@@ -198,40 +181,31 @@ public class SolicitudService {
         
         if (payload.containsKey("motivo")) {
             String motivoNuevo = (String) payload.get("motivo");
-            
-            if (motivoOriginal != null && !motivoOriginal.contains("[Editado por")) {
-                nuevoMotivo.append(motivoOriginal);
-                nuevoMotivo.append("\n\n[Editado por ").append(nombreEditor)
-                          .append(" - ").append(LocalDateTime.now().format(AUDIT_FORMATTER))
-                          .append("]\n").append(motivoNuevo);
-            } else {
-                if (motivoOriginal != null) {
-                    String[] partes = motivoOriginal.split("\\[Editado por");
-                    if (partes.length > 0) {
-                        nuevoMotivo.append(partes[0].trim());
-                    }
-                }
-                
-                nuevoMotivo.append("\n\n[Editado por ").append(nombreEditor)
-                          .append(" - ").append(LocalDateTime.now().format(AUDIT_FORMATTER))
-                          .append("]\n").append(motivoNuevo);
+
+            // Limpiar notas anteriores (edición y conflictos) para solo mantener la última
+            String motivoBase = motivoNuevo;
+
+            // Si el motivo nuevo contiene notas de conflicto, las limpiamos
+            if (motivoBase != null && motivoBase.contains("⚠️ CONFLICTO DE FECHAS:")) {
+                motivoBase = motivoBase.split("⚠️ CONFLICTO DE FECHAS:")[0].trim();
             }
-            
+
+            // Limpiar notas de edición anteriores del motivo nuevo
+            if (motivoBase != null && motivoBase.contains("[Editado por")) {
+                motivoBase = motivoBase.split("\\[Editado por")[0].trim();
+            }
+
+            // Construir el nuevo motivo con solo la última nota de edición
+            nuevoMotivo.append(motivoBase);
+            nuevoMotivo.append("\n\n[Editado por ").append(nombreEditor)
+                      .append(" - ").append(LocalDateTime.now().format(AUDIT_FORMATTER)).append("]");
+
             solicitud.setMotivo(nuevoMotivo.toString());
         }
-        
-        if (payload.containsKey("estado") && puedeGestionarSolicitud(id, empleadoEditorId, rolEditor, (String) payload.get("estado"))) {
-            String nuevoEstado = (String) payload.get("estado");
-            if (Arrays.asList("aprobado", "rechazado").contains(nuevoEstado.toLowerCase())) {
-                solicitud.setEstado(nuevoEstado.toLowerCase());
-                Optional<Empleado> aprobadorOpt = empleadoRepository.findById(empleadoEditorId);
-                if (aprobadorOpt.isPresent()) {
-                    solicitud.setAprobadoPor(aprobadorOpt.get());
-                    solicitud.setFechaAprobacion(LocalDateTime.now());
-                }
-            }
-        }
-        
+
+        // Nota: El cambio de estado (aprobar/rechazar) se hace solo a través de gestionarSolicitud
+        // La edición es solo para el dueño de la solicitud mientras está pendiente
+
         Solicitud solicitudActualizada = solicitudRepository.save(solicitud);
         return new SolicitudResponseDTO(solicitudActualizada);
     }
@@ -252,13 +226,40 @@ public class SolicitudService {
             throw new RuntimeException("La fecha de inicio no puede ser posterior a la fecha de fin");
         }
         
-        List<Solicitud> conflictos = verificarConflictosFecha(request.getEmpleadoId(), request.getFechaInicio(), request.getFechaFin());
-        
+        List<Solicitud> conflictosPropios = verificarConflictosFecha(request.getEmpleadoId(), request.getFechaInicio(), request.getFechaFin());
+
+        // Verificar conflictos por rol (otros empleados del mismo rol)
+        List<Solicitud> conflictosRol = verificarConflictosPorRolYFechas(
+            request.getEmpleadoId(),
+            empleado.getRol(),
+            request.getFechaInicio(),
+            request.getFechaFin()
+        );
+
         String motivo = request.getMotivo();
-        if (!conflictos.isEmpty()) {
-            String conflictoInfo = "\n\n⚠️ NOTIFICACIÓN DEL SISTEMA: Se detectaron " + conflictos.size() + 
-                                   " solicitud(es) existente(s) en el rango de fechas seleccionado.";
-            motivo = motivo + conflictoInfo;
+
+        // Limpiar notas de conflicto anteriores si existen
+        if (motivo != null && motivo.contains("⚠️ CONFLICTO DE FECHAS:")) {
+            motivo = motivo.split("⚠️ CONFLICTO DE FECHAS:")[0].trim();
+        }
+
+        // Agregar nota de conflicto solo si hay conflictos con otros del mismo rol
+        if (!conflictosRol.isEmpty()) {
+            StringBuilder conflictoInfo = new StringBuilder();
+            conflictoInfo.append("\n\n⚠️ CONFLICTO DE FECHAS: ");
+            conflictoInfo.append("Existe(n) ").append(conflictosRol.size()).append(" solicitud(es) ");
+            conflictoInfo.append("de compañeros del mismo rol en este período:\n");
+
+            for (Solicitud conf : conflictosRol) {
+                conflictoInfo.append("• ").append(conf.getEmpleado().getNombre());
+                conflictoInfo.append(" (").append(conf.getTipo()).append(": ");
+                conflictoInfo.append(conf.getFechaInicio().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+                conflictoInfo.append(" - ");
+                conflictoInfo.append(conf.getFechaFin().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+                conflictoInfo.append(")\n");
+            }
+
+            motivo = motivo + conflictoInfo.toString();
         }
         
         Solicitud solicitud = new Solicitud();
