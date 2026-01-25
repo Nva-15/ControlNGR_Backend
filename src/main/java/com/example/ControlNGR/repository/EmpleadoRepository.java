@@ -22,7 +22,15 @@ public interface EmpleadoRepository extends JpaRepository<Empleado, Integer> {
     List<Empleado> findByNivel(String nivel);
     List<Empleado> findByRol(String rol);
     List<Empleado> findByUsuarioActivo(Boolean usuarioActivo);
-    
+    List<Empleado> findByRolAndActivo(String rol, Boolean activo);
+
+    // Excluir admin de la vista de horarios (admin no tiene horarios)
+    @Query("SELECT e FROM Empleado e WHERE e.activo = true AND LOWER(e.rol) <> 'admin'")
+    List<Empleado> findEmpleadosConHorario();
+
+    @Query("SELECT e FROM Empleado e WHERE LOWER(e.rol) = LOWER(:rol) AND e.activo = true AND LOWER(e.rol) <> 'admin'")
+    List<Empleado> findEmpleadosConHorarioPorRol(@Param("rol") String rol);
+
     @Query("SELECT e FROM Empleado e WHERE e.nombre LIKE %:nombre%")
     List<Empleado> buscarPorNombre(@Param("nombre") String nombre);
 }

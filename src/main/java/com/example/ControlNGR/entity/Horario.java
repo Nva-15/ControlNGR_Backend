@@ -29,7 +29,10 @@ public class Horario {
     
     @Column(name = "hora_almuerzo_fin")
     private LocalTime horaAlmuerzoFin;
-    
+
+    @Column(name = "tipo_dia", length = 20)
+    private String tipoDia; // normal, descanso, compensado, vacaciones
+
     // Constructores
     public Horario() {}
 
@@ -87,6 +90,13 @@ public class Horario {
 
 	public void setHoraAlmuerzoFin(LocalTime horaAlmuerzoFin) {
 		this.horaAlmuerzoFin = horaAlmuerzoFin;
-	}    
-    
+	}
+
+	public String getTipoDia() {
+		return tipoDia;
+	}
+
+	public void setTipoDia(String tipoDia) {
+		this.tipoDia = tipoDia;
+	}
 }

@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(dir:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(find:*)",
+      "Bash(mvnw.cmd compile:*)",
+      "Bash(./gradlew.bat compileJava:*)",
+      "Bash(./gradlew compileJava:*)",
+      "Bash(printf:*)",
+      "Bash(python3:*)",
+      "Bash(./gradlew build:*)"
     ]
   }
 }
