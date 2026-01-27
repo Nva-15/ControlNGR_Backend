@@ -46,17 +46,20 @@ public class HorarioSemanalDTO {
         private String horaAlmuerzoInicio;
         private String horaAlmuerzoFin;
         private String tipoDia; // normal, descanso, compensado, vacaciones
+        private String turno; // manana, tarde
 
         public HorarioDiaDTO() {}
 
         public HorarioDiaDTO(Integer id, String horaEntrada, String horaSalida,
-                            String horaAlmuerzoInicio, String horaAlmuerzoFin, String tipoDia) {
+                            String horaAlmuerzoInicio, String horaAlmuerzoFin,
+                            String tipoDia, String turno) {
             this.id = id;
             this.horaEntrada = horaEntrada;
             this.horaSalida = horaSalida;
             this.horaAlmuerzoInicio = horaAlmuerzoInicio;
             this.horaAlmuerzoFin = horaAlmuerzoFin;
             this.tipoDia = tipoDia != null ? tipoDia : "normal";
+            this.turno = turno != null ? turno : "manana";
         }
 
         public Integer getId() { return id; }
@@ -76,5 +79,8 @@ public class HorarioSemanalDTO {
 
         public String getTipoDia() { return tipoDia; }
         public void setTipoDia(String tipoDia) { this.tipoDia = tipoDia; }
+
+        public String getTurno() { return turno; }
+        public void setTurno(String turno) { this.turno = turno; }
     }
 }

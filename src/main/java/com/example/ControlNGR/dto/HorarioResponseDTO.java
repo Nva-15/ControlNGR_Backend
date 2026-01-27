@@ -15,6 +15,7 @@ public class HorarioResponseDTO {
     private String horaAlmuerzoInicio;
     private String horaAlmuerzoFin;
     private String tipoDia;
+    private String turno;
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -31,6 +32,7 @@ public class HorarioResponseDTO {
         this.horaAlmuerzoInicio = formatTime(horario.getHoraAlmuerzoInicio());
         this.horaAlmuerzoFin = formatTime(horario.getHoraAlmuerzoFin());
         this.tipoDia = horario.getTipoDia() != null ? horario.getTipoDia() : "normal";
+        this.turno = horario.getTurno() != null ? horario.getTurno() : "manana";
     }
 
     private String formatTime(LocalTime time) {
@@ -67,4 +69,7 @@ public class HorarioResponseDTO {
 
     public String getEmpleadoRol() { return empleadoRol; }
     public void setEmpleadoRol(String empleadoRol) { this.empleadoRol = empleadoRol; }
+
+    public String getTurno() { return turno; }
+    public void setTurno(String turno) { this.turno = turno; }
 }

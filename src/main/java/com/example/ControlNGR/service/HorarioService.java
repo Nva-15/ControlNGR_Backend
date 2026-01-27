@@ -104,7 +104,8 @@ public class HorarioService {
                         formatTime(h.getHoraSalida()),
                         formatTime(h.getHoraAlmuerzoInicio()),
                         formatTime(h.getHoraAlmuerzoFin()),
-                        h.getTipoDia()
+                        h.getTipoDia(),
+                        h.getTurno()
                     ));
                 }
             }
@@ -147,7 +148,8 @@ public class HorarioService {
                     formatTime(h.getHoraSalida()),
                     formatTime(h.getHoraAlmuerzoInicio()),
                     formatTime(h.getHoraAlmuerzoFin()),
-                    h.getTipoDia()
+                    h.getTipoDia(),
+                    h.getTurno()
                 ));
             }
         }
@@ -179,8 +181,14 @@ public class HorarioService {
             horario.setDiaSemana(diaLower);
             horario.setHoraEntrada(plantilla.getHoraEntrada());
             horario.setHoraSalida(plantilla.getHoraSalida());
-            horario.setHoraAlmuerzoInicio(plantilla.getHoraAlmuerzoInicio());
-            horario.setHoraAlmuerzoFin(plantilla.getHoraAlmuerzoFin());
+            horario.setTurno(plantilla.getTurno() != null ? plantilla.getTurno().toLowerCase() : "manana");
+            if ("tarde".equalsIgnoreCase(plantilla.getTurno())) {
+                horario.setHoraAlmuerzoInicio(null);
+                horario.setHoraAlmuerzoFin(null);
+            } else {
+                horario.setHoraAlmuerzoInicio(plantilla.getHoraAlmuerzoInicio());
+                horario.setHoraAlmuerzoFin(plantilla.getHoraAlmuerzoFin());
+            }
             horario.setTipoDia(plantilla.getTipoDia() != null ? plantilla.getTipoDia().toLowerCase() : "normal");
 
             Horario guardado = horarioRepository.save(horario);
@@ -215,8 +223,14 @@ public class HorarioService {
         horario.setDiaSemana(request.getDiaSemana().toLowerCase());
         horario.setHoraEntrada(request.getHoraEntrada());
         horario.setHoraSalida(request.getHoraSalida());
-        horario.setHoraAlmuerzoInicio(request.getHoraAlmuerzoInicio());
-        horario.setHoraAlmuerzoFin(request.getHoraAlmuerzoFin());
+        horario.setTurno(request.getTurno() != null ? request.getTurno().toLowerCase() : "manana");
+        if ("tarde".equalsIgnoreCase(request.getTurno())) {
+            horario.setHoraAlmuerzoInicio(null);
+            horario.setHoraAlmuerzoFin(null);
+        } else {
+            horario.setHoraAlmuerzoInicio(request.getHoraAlmuerzoInicio());
+            horario.setHoraAlmuerzoFin(request.getHoraAlmuerzoFin());
+        }
         horario.setTipoDia(request.getTipoDia() != null ? request.getTipoDia().toLowerCase() : "normal");
 
         Horario guardado = horarioRepository.save(horario);
@@ -244,8 +258,14 @@ public class HorarioService {
         horario.setDiaSemana(diaSemana.toLowerCase());
         horario.setHoraEntrada(request.getHoraEntrada());
         horario.setHoraSalida(request.getHoraSalida());
-        horario.setHoraAlmuerzoInicio(request.getHoraAlmuerzoInicio());
-        horario.setHoraAlmuerzoFin(request.getHoraAlmuerzoFin());
+        horario.setTurno(request.getTurno() != null ? request.getTurno().toLowerCase() : "manana");
+        if ("tarde".equalsIgnoreCase(request.getTurno())) {
+            horario.setHoraAlmuerzoInicio(null);
+            horario.setHoraAlmuerzoFin(null);
+        } else {
+            horario.setHoraAlmuerzoInicio(request.getHoraAlmuerzoInicio());
+            horario.setHoraAlmuerzoFin(request.getHoraAlmuerzoFin());
+        }
         horario.setTipoDia(request.getTipoDia() != null ? request.getTipoDia().toLowerCase() : "normal");
 
         Horario guardado = horarioRepository.save(horario);
@@ -272,8 +292,14 @@ public class HorarioService {
             horario.setDiaSemana(dia);
             horario.setHoraEntrada(plantilla.getHoraEntrada());
             horario.setHoraSalida(plantilla.getHoraSalida());
-            horario.setHoraAlmuerzoInicio(plantilla.getHoraAlmuerzoInicio());
-            horario.setHoraAlmuerzoFin(plantilla.getHoraAlmuerzoFin());
+            horario.setTurno(plantilla.getTurno() != null ? plantilla.getTurno().toLowerCase() : "manana");
+            if ("tarde".equalsIgnoreCase(plantilla.getTurno())) {
+                horario.setHoraAlmuerzoInicio(null);
+                horario.setHoraAlmuerzoFin(null);
+            } else {
+                horario.setHoraAlmuerzoInicio(plantilla.getHoraAlmuerzoInicio());
+                horario.setHoraAlmuerzoFin(plantilla.getHoraAlmuerzoFin());
+            }
             horario.setTipoDia("normal");
             return new HorarioResponseDTO(horarioRepository.save(horario));
         }).collect(Collectors.toList());
@@ -312,6 +338,13 @@ public class HorarioService {
         if (request.getTipoDia() != null) {
             validarTipoDia(request.getTipoDia());
             horario.setTipoDia(request.getTipoDia().toLowerCase());
+        }
+        if (request.getTurno() != null) {
+            horario.setTurno(request.getTurno().toLowerCase());
+            if ("tarde".equalsIgnoreCase(request.getTurno())) {
+                horario.setHoraAlmuerzoInicio(null);
+                horario.setHoraAlmuerzoFin(null);
+            }
         }
 
         Horario actualizado = horarioRepository.save(horario);

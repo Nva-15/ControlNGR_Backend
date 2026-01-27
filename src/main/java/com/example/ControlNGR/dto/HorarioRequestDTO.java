@@ -11,6 +11,7 @@ public class HorarioRequestDTO {
     private LocalTime horaAlmuerzoInicio;
     private LocalTime horaAlmuerzoFin;
     private String tipoDia;
+    private String turno; // manana, tarde
     private List<String> dias; // Para aplicar a multiples dias
 
     // Getters y Setters
@@ -34,6 +35,9 @@ public class HorarioRequestDTO {
 
     public String getTipoDia() { return tipoDia; }
     public void setTipoDia(String tipoDia) { this.tipoDia = tipoDia; }
+
+    public String getTurno() { return turno; }
+    public void setTurno(String turno) { this.turno = turno; }
 
     public List<String> getDias() { return dias; }
     public void setDias(List<String> dias) { this.dias = dias; }

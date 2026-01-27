@@ -33,6 +33,9 @@ public class Horario {
     @Column(name = "tipo_dia", length = 20)
     private String tipoDia; // normal, descanso, compensado, vacaciones
 
+    @Column(name = "turno", length = 20)
+    private String turno; // manana, tarde
+
     // Constructores
     public Horario() {}
 
@@ -98,5 +101,13 @@ public class Horario {
 
 	public void setTipoDia(String tipoDia) {
 		this.tipoDia = tipoDia;
+	}
+
+	public String getTurno() {
+		return turno;
+	}
+
+	public void setTurno(String turno) {
+		this.turno = turno;
 	}
 }
