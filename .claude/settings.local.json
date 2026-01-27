@@ -9,7 +9,9 @@
       "Bash(./gradlew compileJava:*)",
       "Bash(printf:*)",
       "Bash(python3:*)",
-      "Bash(./gradlew build:*)"
+      "Bash(./gradlew build:*)",
+      "Bash(del \"D:\\\\Mis Proyectos personales\\\\ControlNGR\\\\src\\\\main\\\\java\\\\com\\\\example\\\\ControlNGR\\\\service\\\\HorarioExportService.java\")",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

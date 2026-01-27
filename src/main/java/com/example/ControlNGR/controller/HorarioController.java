@@ -50,6 +50,17 @@ public class HorarioController {
         }
     }
 
+    // Obtener vista consolidada semanal de un empleado individual
+    @GetMapping("/empleado/{empleadoId}/semanal")
+    public ResponseEntity<?> obtenerHorarioSemanalEmpleado(@PathVariable("empleadoId") Integer empleadoId) {
+        try {
+            return ResponseEntity.ok(horarioService.obtenerHorarioSemanalEmpleado(empleadoId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping
     public ResponseEntity<?> crearHorario(@RequestBody HorarioRequestDTO request) {
         try {
@@ -77,6 +88,32 @@ public class HorarioController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error al guardar horario: " + e.getMessage()));
+        }
+    }
+
+    // Aplicar el mismo horario a multiples dias de un empleado
+    @PutMapping("/empleado/{empleadoId}/dias-multiples")
+    public ResponseEntity<?> aplicarHorarioMultiplesDias(
+            @PathVariable("empleadoId") Integer empleadoId,
+            @RequestBody HorarioRequestDTO request) {
+        try {
+            if (request.getDias() == null || request.getDias().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Debe especificar al menos un dia"));
+            }
+
+            List<HorarioResponseDTO> response = horarioService.aplicarHorarioMultiplesDias(
+                    empleadoId, request.getDias(), request);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Horario aplicado a " + request.getDias().size() + " dia(s) correctamente",
+                    "horarios", response
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al aplicar horario: " + e.getMessage()));
         }
     }
 

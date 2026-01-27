@@ -1,6 +1,7 @@
 package com.example.ControlNGR.dto;
 
 import java.time.LocalTime;
+import java.util.List;
 
 public class HorarioRequestDTO {
     private Integer empleadoId;
@@ -10,6 +11,7 @@ public class HorarioRequestDTO {
     private LocalTime horaAlmuerzoInicio;
     private LocalTime horaAlmuerzoFin;
     private String tipoDia;
+    private List<String> dias; // Para aplicar a multiples dias
 
     // Getters y Setters
     public Integer getEmpleadoId() { return empleadoId; }
@@ -32,4 +34,7 @@ public class HorarioRequestDTO {
 
     public String getTipoDia() { return tipoDia; }
     public void setTipoDia(String tipoDia) { this.tipoDia = tipoDia; }
+
+    public List<String> getDias() { return dias; }
+    public void setDias(List<String> dias) { this.dias = dias; }
 }

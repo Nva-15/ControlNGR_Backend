@@ -66,11 +66,15 @@ public class WebSecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/empleados/**")
                     .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
 
+                // VER horarios (consolidado, por empleado, exportar) - Todos los roles
+                .requestMatchers(HttpMethod.GET, "/api/horarios/**")
+                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
+
                 // Subir imágenes de perfil - Todos los usuarios autenticados
                 .requestMatchers("/api/imagenes/**")
                     .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
 
-                // Endpoints protegidos por Rol (CRUD empleados)
+                // Endpoints protegidos por Rol (CRUD empleados y horarios - POST/PUT/DELETE)
                 .requestMatchers("/api/empleados/**", "/api/horarios/**")
                     .hasAnyRole("ADMIN", "SUPERVISOR")
 

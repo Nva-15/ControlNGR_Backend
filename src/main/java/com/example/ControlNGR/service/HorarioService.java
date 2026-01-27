@@ -119,6 +119,77 @@ public class HorarioService {
         return resultado;
     }
 
+    // Vista semanal de un empleado individual
+    public HorarioSemanalDTO obtenerHorarioSemanalEmpleado(Integer empleadoId) {
+        Empleado empleado = empleadoRepository.findById(empleadoId)
+                .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + empleadoId));
+
+        HorarioSemanalDTO dto = new HorarioSemanalDTO(
+            empleado.getId(),
+            empleado.getNombre(),
+            empleado.getRol(),
+            empleado.getCargo()
+        );
+
+        List<Horario> horarios = horarioRepository.findByEmpleadoId(empleado.getId());
+        Map<String, HorarioDiaDTO> horariosSemana = new HashMap<>();
+
+        for (String dia : DIAS_VALIDOS) {
+            horariosSemana.put(dia, null);
+        }
+
+        for (Horario h : horarios) {
+            String dia = h.getDiaSemana().toLowerCase();
+            if (horariosSemana.containsKey(dia)) {
+                horariosSemana.put(dia, new HorarioDiaDTO(
+                    h.getId(),
+                    formatTime(h.getHoraEntrada()),
+                    formatTime(h.getHoraSalida()),
+                    formatTime(h.getHoraAlmuerzoInicio()),
+                    formatTime(h.getHoraAlmuerzoFin()),
+                    h.getTipoDia()
+                ));
+            }
+        }
+
+        dto.setHorariosSemana(horariosSemana);
+        return dto;
+    }
+
+    // Aplicar el mismo horario a multiples dias
+    @Transactional
+    public List<HorarioResponseDTO> aplicarHorarioMultiplesDias(Integer empleadoId, List<String> dias, HorarioRequestDTO plantilla) {
+        Empleado empleado = empleadoRepository.findById(empleadoId)
+                .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + empleadoId));
+
+        if ("admin".equalsIgnoreCase(empleado.getRol())) {
+            throw new RuntimeException("Los administradores no tienen horarios asignados");
+        }
+
+        List<HorarioResponseDTO> resultados = new ArrayList<>();
+
+        for (String dia : dias) {
+            String diaLower = dia.toLowerCase();
+            validarDiaSemana(diaLower);
+
+            Horario horario = horarioRepository.findByEmpleadoAndDiaSemana(empleado, diaLower)
+                    .orElse(new Horario());
+
+            horario.setEmpleado(empleado);
+            horario.setDiaSemana(diaLower);
+            horario.setHoraEntrada(plantilla.getHoraEntrada());
+            horario.setHoraSalida(plantilla.getHoraSalida());
+            horario.setHoraAlmuerzoInicio(plantilla.getHoraAlmuerzoInicio());
+            horario.setHoraAlmuerzoFin(plantilla.getHoraAlmuerzoFin());
+            horario.setTipoDia(plantilla.getTipoDia() != null ? plantilla.getTipoDia().toLowerCase() : "normal");
+
+            Horario guardado = horarioRepository.save(horario);
+            resultados.add(new HorarioResponseDTO(guardado));
+        }
+
+        return resultados;
+    }
+
     @Transactional
     public HorarioResponseDTO crearHorario(HorarioRequestDTO request) {
         validarDiaSemana(request.getDiaSemana());
