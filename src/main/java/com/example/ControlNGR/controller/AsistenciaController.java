@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.example.ControlNGR.dto.AsistenciaRequestDTO;
 import com.example.ControlNGR.dto.AsistenciaResponseDTO;
+import com.example.ControlNGR.dto.ReporteAsistenciaDTO;
 import com.example.ControlNGR.service.AsistenciaService;
 import java.time.LocalDate;
 import java.util.List;
@@ -81,6 +82,19 @@ public class AsistenciaController {
         return ResponseEntity.ok(asistencias);
     }
     
+    @GetMapping("/reporte/rango")
+    public ResponseEntity<?> obtenerReporteAsistencia(
+            @RequestParam("inicio") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
+            @RequestParam("fin") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
+        try {
+            List<ReporteAsistenciaDTO> reporte = asistenciaService.generarReporteAsistencia(inicio, fin);
+            return ResponseEntity.ok(reporte);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al generar reporte: " + e.getMessage()));
+        }
+    }
+
     @PostMapping("/verificar-salidas")
     public ResponseEntity<?> verificarSalidasAutomaticas() {
         try {
