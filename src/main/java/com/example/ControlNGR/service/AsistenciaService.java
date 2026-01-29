@@ -9,9 +9,11 @@ import com.example.ControlNGR.dto.ReporteAsistenciaDTO;
 import com.example.ControlNGR.entity.Asistencia;
 import com.example.ControlNGR.entity.Empleado;
 import com.example.ControlNGR.entity.Horario;
+import com.example.ControlNGR.entity.HorarioSemanalDetalle;
 import com.example.ControlNGR.repository.AsistenciaRepository;
 import com.example.ControlNGR.repository.EmpleadoRepository;
 import com.example.ControlNGR.repository.HorarioRepository;
+import com.example.ControlNGR.repository.HorarioSemanalDetalleRepository;
 import java.time.*;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,7 +33,10 @@ public class AsistenciaService {
     
     @Autowired
     private HorarioRepository horarioRepository;
-    
+
+    @Autowired
+    private HorarioSemanalDetalleRepository horarioSemanalDetalleRepository;
+
     // Registrar entrada o salida
     @Transactional
     public AsistenciaResponseDTO registrarAsistencia(AsistenciaRequestDTO request) {
@@ -66,19 +71,32 @@ public class AsistenciaService {
             }
             
             asistencia.setHoraEntrada(hora);
-            
-            // Verificar si es tardanza (lógica simplificada)
+
+            // Verificar si es tardanza
+            // Prioridad: horario semanal > horario base
             String diaSemana = fecha.getDayOfWeek().toString().toLowerCase();
             String diaEsp = traducirDia(diaSemana);
-            
-            Optional<Horario> horarioOpt = horarioRepository.findByEmpleadoIdAndDiaSemana(
-                empleado.getId(), 
-                diaEsp
-            );
-            
-            if (horarioOpt.isPresent()) {
-                Horario horario = horarioOpt.get();
-                if (hora.isAfter(horario.getHoraEntrada().plusMinutes(5))) { // Tolerancia 5 min
+
+            LocalTime horaEntradaProgramada = null;
+
+            // Buscar primero en horario semanal activo
+            Optional<HorarioSemanalDetalle> horarioSemanalOpt =
+                    horarioSemanalDetalleRepository.findHorarioActivoEmpleadoEnFecha(empleado.getId(), fecha);
+
+            if (horarioSemanalOpt.isPresent()) {
+                HorarioSemanalDetalle detalle = horarioSemanalOpt.get();
+                horaEntradaProgramada = detalle.getHoraEntrada();
+            } else {
+                // Fallback: horario base
+                Optional<Horario> horarioOpt = horarioRepository.findByEmpleadoIdAndDiaSemana(
+                        empleado.getId(), diaEsp);
+                if (horarioOpt.isPresent()) {
+                    horaEntradaProgramada = horarioOpt.get().getHoraEntrada();
+                }
+            }
+
+            if (horaEntradaProgramada != null) {
+                if (hora.isAfter(horaEntradaProgramada.plusMinutes(5))) { // Tolerancia 5 min
                     asistencia.setEstado("tardanza");
                     asistencia.setObservaciones("Marcaje tarde");
                 } else {
@@ -170,6 +188,7 @@ public class AsistenciaService {
     }
     
     // Generar reporte de asistencia con calculo de puntualidad
+    // Prioriza horarios semanales si existen, sino usa horario base
     @Transactional(readOnly = true)
     public List<ReporteAsistenciaDTO> generarReporteAsistencia(LocalDate fechaInicio, LocalDate fechaFin) {
         List<ReporteAsistenciaDTO> reporte = new ArrayList<>();
@@ -181,11 +200,11 @@ public class AsistenciaService {
         List<Asistencia> asistencias = asistenciaRepository.findByFechaBetween(fechaInicio, fechaFin);
 
         for (Empleado empleado : empleados) {
-            // Construir mapa de horario semanal del empleado
+            // Construir mapa de horario base del empleado (fallback)
             List<Horario> horariosEmpleado = horarioRepository.findByEmpleadoId(empleado.getId());
-            Map<String, Horario> horarioMap = new HashMap<>();
+            Map<String, Horario> horarioBaseMap = new HashMap<>();
             for (Horario h : horariosEmpleado) {
-                horarioMap.put(h.getDiaSemana().toLowerCase(), h);
+                horarioBaseMap.put(h.getDiaSemana().toLowerCase(), h);
             }
 
             // Iterar cada dia del rango
@@ -194,7 +213,36 @@ public class AsistenciaService {
                 String diaSemanaIngles = fecha.getDayOfWeek().toString().toLowerCase();
                 String diaSemanaEsp = traducirDia(diaSemanaIngles);
 
-                Horario horario = horarioMap.get(diaSemanaEsp);
+                // PRIORIDAD: Buscar en horarios semanales primero
+                Optional<HorarioSemanalDetalle> horarioSemanalOpt =
+                        horarioSemanalDetalleRepository.findHorarioActivoEmpleadoEnFecha(empleado.getId(), fecha);
+
+                // Variables para el horario a usar
+                LocalTime horaEntradaProgramada = null;
+                LocalTime horaSalidaProgramada = null;
+                String tipoDia = null;
+                String turno = null;
+                boolean tieneHorario = false;
+
+                if (horarioSemanalOpt.isPresent()) {
+                    // Usar horario semanal específico
+                    HorarioSemanalDetalle detalle = horarioSemanalOpt.get();
+                    horaEntradaProgramada = detalle.getHoraEntrada();
+                    horaSalidaProgramada = detalle.getHoraSalida();
+                    tipoDia = detalle.getTipoDia();
+                    turno = detalle.getTurno();
+                    tieneHorario = true;
+                } else {
+                    // Fallback: usar horario base
+                    Horario horarioBase = horarioBaseMap.get(diaSemanaEsp);
+                    if (horarioBase != null) {
+                        horaEntradaProgramada = horarioBase.getHoraEntrada();
+                        horaSalidaProgramada = horarioBase.getHoraSalida();
+                        tipoDia = horarioBase.getTipoDia();
+                        turno = horarioBase.getTurno();
+                        tieneHorario = true;
+                    }
+                }
 
                 // Buscar asistencia para este empleado en esta fecha
                 Asistencia asistencia = null;
@@ -213,21 +261,20 @@ public class AsistenciaService {
                 dto.setFecha(fecha);
                 dto.setDiaSemana(diaSemanaEsp);
 
-                if (horario != null) {
-                    dto.setTipoDia(horario.getTipoDia());
-                    dto.setTurno(horario.getTurno());
-                    dto.setHorarioEntradaFromTime(horario.getHoraEntrada());
-                    dto.setHorarioSalidaFromTime(horario.getHoraSalida());
+                if (tieneHorario) {
+                    dto.setTipoDia(tipoDia);
+                    dto.setTurno(turno);
+                    dto.setHorarioEntradaFromTime(horaEntradaProgramada);
+                    dto.setHorarioSalidaFromTime(horaSalidaProgramada);
                 }
 
-                if (horario != null && horario.getTipoDia() != null
-                        && !"normal".equalsIgnoreCase(horario.getTipoDia())) {
-                    // Dia no laboral (descanso, compensado, vacaciones)
-                    String tipo = horario.getTipoDia().substring(0, 1).toUpperCase()
-                            + horario.getTipoDia().substring(1).toLowerCase();
-                    dto.setEstado(tipo);
+                if (tieneHorario && tipoDia != null && !"normal".equalsIgnoreCase(tipoDia)) {
+                    // Dia no laboral (descanso, compensado, vacaciones, permiso)
+                    String tipoFormateado = tipoDia.substring(0, 1).toUpperCase()
+                            + tipoDia.substring(1).toLowerCase();
+                    dto.setEstado(tipoFormateado);
                     dto.setMinutosRetraso(null);
-                } else if (horario == null) {
+                } else if (!tieneHorario) {
                     // Sin horario definido
                     dto.setEstado("Sin horario");
                     dto.setMinutosRetraso(null);
@@ -240,13 +287,18 @@ public class AsistenciaService {
                         dto.setSalidaAutomatica(asistencia.getSalidaAutomatica());
 
                         // Calcular retraso
-                        long minutos = Duration.between(
-                                horario.getHoraEntrada(), asistencia.getHoraEntrada()
-                        ).toMinutes();
+                        if (horaEntradaProgramada != null) {
+                            long minutos = Duration.between(
+                                    horaEntradaProgramada, asistencia.getHoraEntrada()
+                            ).toMinutes();
 
-                        if (minutos > 5) {
-                            dto.setEstado("Tardanza");
-                            dto.setMinutosRetraso(minutos);
+                            if (minutos > 5) {
+                                dto.setEstado("Tardanza");
+                                dto.setMinutosRetraso(minutos);
+                            } else {
+                                dto.setEstado("A tiempo");
+                                dto.setMinutosRetraso(0L);
+                            }
                         } else {
                             dto.setEstado("A tiempo");
                             dto.setMinutosRetraso(0L);

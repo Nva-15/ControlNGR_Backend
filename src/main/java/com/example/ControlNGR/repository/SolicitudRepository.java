@@ -54,5 +54,15 @@ public interface SolicitudRepository extends JpaRepository<Solicitud, Integer> {
             @Param("rolEmpleado") String rolEmpleado,
             @Param("fechaInicio") LocalDate fechaInicio,
             @Param("fechaFin") LocalDate fechaFin);
-    
+
+    // Buscar solicitudes aprobadas que se solapan con un rango de fechas
+    @Query("SELECT s FROM Solicitud s WHERE s.estado = 'aprobado' " +
+           "AND ((s.fechaInicio BETWEEN :fechaInicio AND :fechaFin) OR " +
+           "(s.fechaFin BETWEEN :fechaInicio AND :fechaFin) OR " +
+           "(:fechaInicio BETWEEN s.fechaInicio AND s.fechaFin) OR " +
+           "(:fechaFin BETWEEN s.fechaInicio AND s.fechaFin))")
+    List<Solicitud> findSolicitudesAprobadasEnRango(
+            @Param("fechaInicio") LocalDate fechaInicio,
+            @Param("fechaFin") LocalDate fechaFin);
+
 }

@@ -70,12 +70,19 @@ public class WebSecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/horarios/**")
                     .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
 
+                // Test endpoint público
+                .requestMatchers("/api/horarios-semanales/test").permitAll()
+
+                // VER horarios semanales - Todos los roles
+                .requestMatchers(HttpMethod.GET, "/api/horarios-semanales/**")
+                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
+
                 // Subir imágenes de perfil - Todos los usuarios autenticados
                 .requestMatchers("/api/imagenes/**")
                     .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
 
                 // Endpoints protegidos por Rol (CRUD empleados y horarios - POST/PUT/DELETE)
-                .requestMatchers("/api/empleados/**", "/api/horarios/**")
+                .requestMatchers("/api/empleados/**", "/api/horarios/**", "/api/horarios-semanales/**")
                     .hasAnyRole("ADMIN", "SUPERVISOR")
 
                 .requestMatchers("/api/asistencia/**", "/api/solicitudes/**")

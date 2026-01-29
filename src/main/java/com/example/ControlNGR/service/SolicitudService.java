@@ -17,13 +17,16 @@ import java.util.stream.Collectors;
 
 @Service
 public class SolicitudService {
-    
+
     @Autowired
     private SolicitudRepository solicitudRepository;
-    
+
     @Autowired
     private EmpleadoRepository empleadoRepository;
-    
+
+    @Autowired
+    private HorarioSemanalService horarioSemanalService;
+
     private static final DateTimeFormatter AUDIT_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     
     public boolean puedeEditarSolicitud(Integer solicitudId, Integer empleadoId, String rolEmpleado) {
@@ -131,9 +134,25 @@ public class SolicitudService {
         }
 
         Solicitud savedSolicitud = solicitudRepository.save(solicitud);
+
+        // Integración con Horarios Semanales
+        try {
+            if ("aprobado".equals(estado.toLowerCase())) {
+                // Si se aprobó, aplicar a horarios semanales existentes
+                horarioSemanalService.aplicarSolicitudAprobada(savedSolicitud);
+            } else if (esCorreccion && "rechazado".equals(estado.toLowerCase()) &&
+                       "aprobado".equals(estadoAnterior)) {
+                // Si se rechazó una que estaba aprobada, revertir en horarios semanales
+                horarioSemanalService.revertirSolicitud(savedSolicitud.getId());
+            }
+        } catch (Exception e) {
+            // Log del error pero no fallar la gestión de la solicitud
+            System.err.println("Error al actualizar horarios semanales: " + e.getMessage());
+        }
+
         return new SolicitudResponseDTO(savedSolicitud);
     }
-    
+
     public SolicitudResponseDTO editarSolicitud(Integer id, Map<String, Object> payload, 
                                                 Integer empleadoEditorId, String rolEditor) {
         
