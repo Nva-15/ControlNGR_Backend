@@ -42,6 +42,52 @@ public class ImageService {
         return false;
     }
 
+    private String detectarFormatoImagen(byte[] bytes) {
+        if (bytes == null || bytes.length < 4) {
+            return "desconocido (archivo muy pequeño)";
+        }
+
+        // PNG: 89 50 4E 47
+        if (bytes.length >= 4 && bytes[0] == (byte) 0x89 && bytes[1] == 0x50 &&
+            bytes[2] == 0x4E && bytes[3] == 0x47) {
+            return "PNG";
+        }
+
+        // JPEG: FF D8 FF
+        if (bytes.length >= 3 && bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xD8 && bytes[2] == (byte) 0xFF) {
+            return "JPEG";
+        }
+
+        // GIF: 47 49 46
+        if (bytes.length >= 3 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) {
+            return "GIF";
+        }
+
+        // BMP: 42 4D
+        if (bytes.length >= 2 && bytes[0] == 0x42 && bytes[1] == 0x4D) {
+            return "BMP";
+        }
+
+        // WebP: 52 49 46 46 (RIFF) + WebP signature at offset 8
+        if (bytes.length >= 12 && bytes[0] == 0x52 && bytes[1] == 0x49 &&
+            bytes[2] == 0x46 && bytes[3] == 0x46 &&
+            bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) {
+            return "WebP (NO SOPORTADO)";
+        }
+
+        // RIFF sin WebP (podría ser WAV, AVI, etc.)
+        if (bytes.length >= 4 && bytes[0] == 0x52 && bytes[1] == 0x49 &&
+            bytes[2] == 0x46 && bytes[3] == 0x46) {
+            return "RIFF (posiblemente WebP, WAV o AVI - NO SOPORTADO)";
+        }
+
+        return "desconocido (magic bytes: " +
+            String.format("%02X %02X %02X %02X",
+                bytes[0], bytes[1],
+                bytes.length > 2 ? bytes[2] : 0,
+                bytes.length > 3 ? bytes[3] : 0) + ")";
+    }
+
     private String generarNombreArchivo(String nombreBase, String extension) {
         String nombreLimpio = nombreBase.toLowerCase()
                 .replaceAll("[^a-z0-9áéíóúüñ]", "_")
@@ -113,22 +159,68 @@ public class ImageService {
         }
 
         String nombreOriginal = archivo.getOriginalFilename();
+        logger.info("Procesando imagen: {}, tamaño: {} bytes, tipo: {}",
+            nombreOriginal, archivo.getSize(), archivo.getContentType());
+
         if (nombreOriginal == null || !esExtensionValida(nombreOriginal)) {
             throw new IllegalArgumentException("Formato de archivo no permitido. Use PNG, JPG, JPEG, GIF o BMP");
+        }
+
+        // Validar ContentType
+        String contentType = archivo.getContentType();
+        if (contentType == null || (!contentType.startsWith("image/") && !contentType.equals("application/octet-stream"))) {
+            logger.warn("ContentType invalido: {}", contentType);
+            throw new IllegalArgumentException("El archivo no es una imagen valida. ContentType: " + contentType);
         }
 
         if (archivo.getSize() > 5 * 1024 * 1024) {
             throw new IllegalArgumentException("El archivo es demasiado grande. Maximo 5MB");
         }
 
+        if (archivo.getSize() == 0) {
+            throw new IllegalArgumentException("El archivo tiene tamaño 0 bytes");
+        }
+
         String extensionOriginal = nombreOriginal.substring(nombreOriginal.lastIndexOf(".") + 1).toLowerCase();
         String extensionFinal = extensionOriginal.equals("png") ? ".png" : ".jpg";
         String formatoSalida = extensionOriginal.equals("png") ? "png" : "jpg";
 
-        BufferedImage imagenOriginal = ImageIO.read(archivo.getInputStream());
-        if (imagenOriginal == null) {
-            throw new IllegalArgumentException("No se pudo leer la imagen");
+        // Leer bytes del archivo para evitar problemas con el stream
+        byte[] bytesArchivo = archivo.getBytes();
+        logger.info("Bytes leidos del archivo: {} bytes", bytesArchivo.length);
+
+        // Detectar el formato real del archivo antes de intentar leerlo
+        String formatoDetectado = detectarFormatoImagen(bytesArchivo);
+        logger.info("Formato detectado por magic bytes: {}", formatoDetectado);
+
+        // Rechazar archivos WebP o RIFF que no son soportados
+        if (formatoDetectado.contains("WebP") || formatoDetectado.contains("RIFF")) {
+            throw new IllegalArgumentException(
+                "Formato WebP no soportado. " +
+                "Por favor, convierta la imagen a PNG o JPG antes de subirla. " +
+                "Puede usar herramientas online como convertio.co o cloudconvert.com"
+            );
         }
+
+        BufferedImage imagenOriginal = null;
+        try {
+            imagenOriginal = ImageIO.read(new ByteArrayInputStream(bytesArchivo));
+        } catch (Exception e) {
+            logger.error("Error al intentar leer imagen con ImageIO: {}", e.getMessage());
+        }
+
+        if (imagenOriginal == null) {
+            logger.error("ImageIO no pudo leer la imagen. Nombre: {}, Tipo: {}, Tamaño: {} bytes, Extension: {}",
+                nombreOriginal, archivo.getContentType(), bytesArchivo.length, extensionOriginal);
+
+            throw new IllegalArgumentException(
+                "No se pudo leer la imagen. Formato esperado: " + extensionOriginal +
+                ", Formato detectado: " + formatoDetectado +
+                ". Asegurese de que el archivo sea una imagen PNG, JPG, GIF o BMP valida."
+            );
+        }
+
+        logger.info("Imagen leida exitosamente: {}x{} pixeles", imagenOriginal.getWidth(), imagenOriginal.getHeight());
 
         long tamanoOriginal = archivo.getSize();
         BufferedImage imagenRedimensionada = redimensionarImagen(imagenOriginal);

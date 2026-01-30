@@ -97,6 +97,7 @@ public class ImageController {
                 "success", true,
                 "message", "Imagen actualizada correctamente",
                 "foto", nombreArchivo,
+                "ruta", nombreArchivo,
                 "empleadoId", empleadoId
             ));
             
