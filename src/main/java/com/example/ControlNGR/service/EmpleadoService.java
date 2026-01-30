@@ -139,7 +139,7 @@ public class EmpleadoService {
                     throw new RuntimeException("Formato de email inválido");
                 }
                 
-                Optional<Empleado> empleadoExistente = empleadoRepository.findByEmail(emailLimpio);
+                Optional<Empleado> empleadoExistente = empleadoRepository.findFirstByEmail(emailLimpio);
                 if (empleadoExistente.isPresent() && !empleadoExistente.get().getId().equals(empleadoId)) {
                     throw new RuntimeException("El email ya está registrado por otro usuario");
                 }
@@ -280,8 +280,8 @@ public class EmpleadoService {
         return empleadoRepository.findByUsername(username);
     }
     
-    public Optional<Empleado> findByEmail(String email) {
-        return empleadoRepository.findByEmail(email);
+    public Optional<Empleado> findFirstByEmail(String email) {
+        return empleadoRepository.findFirstByEmail(email);
     }
     
     private String generarIdentificador(String nombreCompleto) {
@@ -338,20 +338,24 @@ public class EmpleadoService {
         }
         
         // Email: solo si viene con valor real y válido
-        if (empleadoActualizado.getEmail() != null && 
+        if (empleadoActualizado.getEmail() != null &&
             !empleadoActualizado.getEmail().trim().isEmpty() &&
             !empleadoActualizado.getEmail().trim().toLowerCase().equals(empleadoExistente.getEmail())) {
-            
+
             String emailLimpio = empleadoActualizado.getEmail().trim().toLowerCase();
-            
+
             // Validar formato básico
-            if (emailLimpio.contains("@") && emailLimpio.contains(".")) {
-                // Verificar si no está usado por otro
-                Optional<Empleado> empleadoConEmail = empleadoRepository.findByEmail(emailLimpio);
-                if (!empleadoConEmail.isPresent() || empleadoConEmail.get().getId().equals(id)) {
-                    empleadoExistente.setEmail(emailLimpio);
-                }
+            if (!emailLimpio.contains("@") || !emailLimpio.contains(".")) {
+                throw new RuntimeException("Formato de email inválido");
             }
+
+            // Verificar si no está usado por otro empleado
+            Optional<Empleado> empleadoConEmail = empleadoRepository.findFirstByEmail(emailLimpio);
+            if (empleadoConEmail.isPresent() && !empleadoConEmail.get().getId().equals(id)) {
+                throw new RuntimeException("El email ya está registrado por otro empleado");
+            }
+
+            empleadoExistente.setEmail(emailLimpio);
         }
         
         // Descripción: aceptar string vacío para limpiar el campo
@@ -537,7 +541,7 @@ public class EmpleadoService {
         if (empleadoOpt.isPresent()) {
             Empleado empleado = empleadoOpt.get();
             
-            Optional<Empleado> empleadoExistente = empleadoRepository.findByEmail(email);
+            Optional<Empleado> empleadoExistente = empleadoRepository.findFirstByEmail(email);
             if (empleadoExistente.isPresent() && !empleadoExistente.get().getId().equals(empleadoId)) {
                 throw new RuntimeException("El email ya está registrado por otro usuario");
             }

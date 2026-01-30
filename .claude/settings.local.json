@@ -12,7 +12,14 @@
       "Bash(./gradlew build:*)",
       "Bash(del \"D:\\\\Mis Proyectos personales\\\\ControlNGR\\\\src\\\\main\\\\java\\\\com\\\\example\\\\ControlNGR\\\\service\\\\HorarioExportService.java\")",
       "mcp__ide__getDiagnostics",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(.gradlew.bat compileJava:*)",
+      "Bash(cmd.exe /c \"gradlew.bat compileJava\")",
+      "Bash(echo:*)",
+      "Bash(./gradlew clean build:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(./gradlew bootRun:*)"
     ]
   }
 }

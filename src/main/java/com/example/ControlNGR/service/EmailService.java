@@ -1,292 +1,481 @@
 package com.example.ControlNGR.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-import java.util.HashMap;
-import java.util.Map;
+
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
+import java.io.UnsupportedEncodingException;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 
 @Service
 public class EmailService {
-    
-    @Value("${formspree.url:https://formspree.io/f/xbddlqkb}")
-    private String formspreeUrl;
-    
-    private final RestTemplate restTemplate = new RestTemplate();
-    
-    public void enviarNotificacionSolicitud(String destinatarioReal, String empleadoNombre, 
-                                           String tipoSolicitud, String estado, 
-                                           String comentarios, String fechaInicio, 
-                                           String fechaFin) {
+
+    private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
+
+    @Autowired
+    private JavaMailSender mailSender;
+
+    @Value("${app.mail.enabled:true}")
+    private boolean emailEnabled;
+
+    @Value("${app.mail.from:proyecto.24web@gmail.com}")
+    private String fromEmail;
+
+    @Value("${app.mail.from-name:Sistema Control NGR}")
+    private String fromName;
+
+    /**
+     * Notifica al empleado sobre el estado de su solicitud (aprobada/rechazada)
+     */
+    public void enviarNotificacionSolicitud(String destinatarioEmail, String empleadoNombre,
+                                            String tipoSolicitud, String estado,
+                                            String comentarios, String fechaInicio,
+                                            String fechaFin, String gestionadoPor) {
+        if (!emailEnabled || destinatarioEmail == null || destinatarioEmail.isEmpty()) {
+            logger.warn("Email deshabilitado o destinatario vacío");
+            return;
+        }
+
         try {
             String tipoFormateado = formatearTipoSolicitud(tipoSolicitud);
             String estadoFormateado = formatearEstado(estado);
-            
-            Map<String, String> emailData = new HashMap<>();
-            emailData.put("_replyto", "sistema@controlngr.com");
-            emailData.put("_subject", "Notificación de Solicitud - Sistema ControlNGR");
-            emailData.put("email", destinatarioReal);
-            emailData.put("empleado", empleadoNombre);
-            emailData.put("tipo", tipoFormateado);
-            emailData.put("estado", estadoFormateado);
-            emailData.put("fecha_inicio", fechaInicio);
-            emailData.put("fecha_fin", fechaFin);
-            emailData.put("comentarios", comentarios != null ? comentarios : "Sin comentarios adicionales");
-            emailData.put("message", 
-                "Hola " + empleadoNombre + ",\n\n" +
-                "📋 **ESTADO DE TU SOLICITUD**\n" +
-                "─────────────────────────────\n\n" +
-                "🔹 **Tipo**: " + tipoFormateado + "\n" +
-                "🔹 **Estado**: " + estadoFormateado + "\n" +
-                "🔹 **Período**: " + fechaInicio + " al " + fechaFin + "\n" +
-                (comentarios != null && !comentarios.trim().isEmpty() ? 
-                 "🔹 **Comentarios**: " + comentarios + "\n\n" : "\n") +
-                "─────────────────────────────\n" +
-                "📅 **Detalles Adicionales**\n" +
-                "• Fecha de notificación: " + java.time.LocalDate.now() + "\n" +
-                "• Sistema: ControlNGR\n\n" +
-                "Si tienes alguna pregunta, contacta a tu supervisor.\n\n" +
-                "Saludos,\n" +
-                "✅ Sistema ControlNGR"
+
+            String asunto = "Notificación de Solicitud - Sistema ControlNGR";
+            String contenido = construirPlantillaNotificacionEstado(
+                    empleadoNombre, tipoFormateado, estadoFormateado,
+                    fechaInicio, fechaFin, comentarios, gestionadoPor
             );
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            
-            HttpEntity<Map<String, String>> request = new HttpEntity<>(emailData, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(formspreeUrl, request, String.class);
-            
-            if (response.getStatusCode() == HttpStatus.OK) {
-                System.out.println("✅ Email enviado a: " + destinatarioReal);
-            } else {
-                System.out.println("❌ Error al enviar email a " + destinatarioReal + ": " + response.getStatusCode());
-            }
-            
+
+            enviarEmail(destinatarioEmail, asunto, contenido);
+            logger.info("Notificación de solicitud enviada a: {}", destinatarioEmail);
+
         } catch (Exception e) {
-            System.err.println("❌ Error en servicio de email para " + destinatarioReal + ": " + e.getMessage());
+            logger.error("Error enviando notificación de solicitud a {}: {}", destinatarioEmail, e.getMessage());
         }
     }
-    
-    public void enviarNotificacionNuevaSolicitud(String destinatarioReal, String supervisorNombre, 
-                                                String empleadoNombre, String tipoSolicitud,
-                                                String fechaInicio, String fechaFin) {
+
+    /**
+     * Notifica a supervisores cuando un técnico/hd/noc crea una nueva solicitud
+     */
+    public void enviarNotificacionNuevaSolicitud(String destinatarioEmail, String supervisorNombre,
+                                                  String empleadoNombre, String tipoSolicitud,
+                                                  String fechaInicio, String fechaFin) {
+        if (!emailEnabled || destinatarioEmail == null || destinatarioEmail.isEmpty()) {
+            logger.warn("Email deshabilitado o destinatario vacío");
+            return;
+        }
+
         try {
             String tipoFormateado = formatearTipoSolicitud(tipoSolicitud);
-            
-            Map<String, String> emailData = new HashMap<>();
-            emailData.put("_replyto", "sistema@controlngr.com");
-            emailData.put("_subject", "⚠️ NUEVA SOLICITUD PENDIENTE - Sistema ControlNGR");
-            emailData.put("email", destinatarioReal);
-            emailData.put("supervisor", supervisorNombre);
-            emailData.put("empleado", empleadoNombre);
-            emailData.put("tipo", tipoFormateado);
-            emailData.put("fecha_inicio", fechaInicio);
-            emailData.put("fecha_fin", fechaFin);
-            emailData.put("message", 
-                "Hola " + supervisorNombre + ",\n\n" +
-                "🔔 **NUEVA SOLICITUD PENDIENTE DE REVISIÓN**\n" +
-                "─────────────────────────────────────\n\n" +
-                "👤 **Empleado**: " + empleadoNombre + "\n" +
-                "📋 **Tipo de Solicitud**: " + tipoFormateado + "\n" +
-                "📅 **Período Solicitado**: " + fechaInicio + " al " + fechaFin + "\n" +
-                "⏰ **Fecha de Solicitud**: " + java.time.LocalDate.now() + "\n\n" +
-                "─────────────────────────────────────\n" +
-                "📋 **ACCION REQUERIDA**\n\n" +
-                "Por favor, revise esta solicitud en el sistema:\n" +
-                "• Ingrese al módulo de Solicitudes\n" +
-                "• Verifique disponibilidad y políticas\n" +
-                "• Aprobe o rechace según corresponda\n" +
-                "• Agregue comentarios si es necesario\n\n" +
-                "📊 **ESTADÍSTICAS RÁPIDAS**\n" +
-                "• Tiempo promedio de respuesta: 24-48 horas\n" +
-                "• Urgencia: Media\n\n" +
-                "Saludos,\n" +
-                "✅ Sistema ControlNGR"
+
+            String asunto = "NUEVA SOLICITUD PENDIENTE - Sistema ControlNGR";
+            String contenido = construirPlantillaNuevaSolicitud(
+                    supervisorNombre, empleadoNombre, tipoFormateado, fechaInicio, fechaFin
             );
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            
-            HttpEntity<Map<String, String>> request = new HttpEntity<>(emailData, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(formspreeUrl, request, String.class);
-            
-            if (response.getStatusCode() == HttpStatus.OK) {
-                System.out.println("✅ Notificación enviada a supervisor: " + destinatarioReal);
-            } else {
-                System.out.println("❌ Error enviando a supervisor " + destinatarioReal);
-            }
-            
+
+            enviarEmail(destinatarioEmail, asunto, contenido);
+            logger.info("Notificación de nueva solicitud enviada a supervisor: {}", destinatarioEmail);
+
         } catch (Exception e) {
-            System.err.println("❌ Error enviando notificación a " + destinatarioReal + ": " + e.getMessage());
+            logger.error("Error enviando notificación a supervisor {}: {}", destinatarioEmail, e.getMessage());
         }
     }
-    
-    public void enviarNotificacionCambioPassword(String destinatarioReal, String empleadoNombre) {
+
+    /**
+     * Notifica a admin cuando un supervisor crea una solicitud
+     */
+    public void enviarNotificacionSolicitudSupervisor(String destinatarioEmail, String adminNombre,
+                                                       String supervisorNombre, String tipoSolicitud,
+                                                       String fechaInicio, String fechaFin) {
+        if (!emailEnabled || destinatarioEmail == null || destinatarioEmail.isEmpty()) {
+            logger.warn("Email deshabilitado o destinatario vacío");
+            return;
+        }
+
         try {
-            Map<String, String> emailData = new HashMap<>();
-            emailData.put("_replyto", "sistema@controlngr.com");
-            emailData.put("_subject", "🔐 Cambio de Contraseña - Sistema ControlNGR");
-            emailData.put("email", destinatarioReal);
-            emailData.put("empleado", empleadoNombre);
-            emailData.put("message", 
-                "Hola " + empleadoNombre + ",\n\n" +
-                "✅ **CAMBIO DE CONTRASEÑA EXITOSO**\n" +
-                "─────────────────────────────────\n\n" +
-                "Se ha completado exitosamente el cambio de tu contraseña en el sistema ControlNGR.\n\n" +
-                "📋 **DETALLES**\n" +
-                "• Fecha del cambio: " + java.time.LocalDate.now() + "\n" +
-                "• Hora: " + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) + "\n" +
-                "• Sistema: ControlNGR v1.0\n\n" +
-                "⚠️ **IMPORTANTE**\n" +
-                "Si no realizaste este cambio, por favor:\n" +
-                "1. Contacta inmediatamente al administrador\n" +
-                "2. Cambia tu contraseña nuevamente\n" +
-                "3. Reporta cualquier actividad sospechosa\n\n" +
-                "🔒 **CONSEJOS DE SEGURIDAD**\n" +
-                "• Usa contraseñas fuertes\n" +
-                "• No compartas tu contraseña\n" +
-                "• Cambia periódicamente tu contraseña\n\n" +
-                "Saludos,\n" +
-                "✅ Sistema ControlNGR"
+            String tipoFormateado = formatearTipoSolicitud(tipoSolicitud);
+
+            String asunto = "SOLICITUD DE SUPERVISOR PENDIENTE - Sistema ControlNGR";
+            String contenido = construirPlantillaSolicitudSupervisor(
+                    adminNombre, supervisorNombre, tipoFormateado, fechaInicio, fechaFin
             );
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            
-            HttpEntity<Map<String, String>> request = new HttpEntity<>(emailData, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(formspreeUrl, request, String.class);
-            
-            if (response.getStatusCode() == HttpStatus.OK) {
-                System.out.println("✅ Notificación de cambio de password enviada a: " + destinatarioReal);
-            } else {
-                System.out.println("❌ Error enviando notificación a " + destinatarioReal);
-            }
-            
+
+            enviarEmail(destinatarioEmail, asunto, contenido);
+            logger.info("Notificación de solicitud de supervisor enviada a admin: {}", destinatarioEmail);
+
         } catch (Exception e) {
-            System.err.println("❌ Error enviando notificación de cambio de password a " + destinatarioReal + ": " + e.getMessage());
+            logger.error("Error enviando notificación a admin {}: {}", destinatarioEmail, e.getMessage());
         }
     }
-    
-    public void enviarNotificacionActualizacionPerfil(String destinatarioReal, String empleadoNombre) {
+
+    /**
+     * Notifica al empleado sobre cambio de contraseña
+     */
+    public void enviarNotificacionCambioPassword(String destinatarioEmail, String empleadoNombre) {
+        if (!emailEnabled || destinatarioEmail == null || destinatarioEmail.isEmpty()) {
+            logger.warn("Email deshabilitado o destinatario vacío");
+            return;
+        }
+
         try {
-            Map<String, String> emailData = new HashMap<>();
-            emailData.put("_replyto", "sistema@controlngr.com");
-            emailData.put("_subject", "📝 Actualización de Perfil - Sistema ControlNGR");
-            emailData.put("email", destinatarioReal);
-            emailData.put("empleado", empleadoNombre);
-            emailData.put("message", 
-                "Hola " + empleadoNombre + ",\n\n" +
-                "✅ **PERFIL ACTUALIZADO EXITOSAMENTE**\n" +
-                "─────────────────────────────────────\n\n" +
-                "Tu información de perfil ha sido actualizada correctamente en el sistema ControlNGR.\n\n" +
-                "📋 **DETALLES**\n" +
-                "• Fecha de actualización: " + java.time.LocalDate.now() + "\n" +
-                "• Hora: " + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) + "\n" +
-                "• Sistema: ControlNGR v1.0\n\n" +
-                "🔍 **QUÉ SE ACTUALIZÓ**\n" +
-                "• Información personal\n" +
-                "• Datos de contacto\n" +
-                "• Preferencias del perfil\n\n" +
-                "⚠️ **VERIFICACIÓN**\n" +
-                "Por favor verifica que toda tu información esté correcta:\n" +
-                "1. Ingresa a tu perfil en el sistema\n" +
-                "2. Revisa todos los datos\n" +
-                "3. Reporta cualquier error\n\n" +
-                "Saludos,\n" +
-                "✅ Sistema ControlNGR"
-            );
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            
-            HttpEntity<Map<String, String>> request = new HttpEntity<>(emailData, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(formspreeUrl, request, String.class);
-            
-            if (response.getStatusCode() == HttpStatus.OK) {
-                System.out.println("✅ Notificación de actualización de perfil enviada a: " + destinatarioReal);
-            } else {
-                System.out.println("❌ Error enviando notificación a " + destinatarioReal);
-            }
-            
+            String asunto = "Cambio de Contraseña - Sistema ControlNGR";
+            String contenido = construirPlantillaCambioPassword(empleadoNombre);
+
+            enviarEmail(destinatarioEmail, asunto, contenido);
+            logger.info("Notificación de cambio de password enviada a: {}", destinatarioEmail);
+
         } catch (Exception e) {
-            System.err.println("❌ Error enviando notificación de actualización de perfil a " + destinatarioReal + ": " + e.getMessage());
+            logger.error("Error enviando notificación de cambio de password a {}: {}", destinatarioEmail, e.getMessage());
         }
     }
-    
+
+    /**
+     * Notifica al empleado sobre actualización de perfil
+     */
+    public void enviarNotificacionActualizacionPerfil(String destinatarioEmail, String empleadoNombre) {
+        if (!emailEnabled || destinatarioEmail == null || destinatarioEmail.isEmpty()) {
+            logger.warn("Email deshabilitado o destinatario vacío");
+            return;
+        }
+
+        try {
+            String asunto = "Actualización de Perfil - Sistema ControlNGR";
+            String contenido = construirPlantillaActualizacionPerfil(empleadoNombre);
+
+            enviarEmail(destinatarioEmail, asunto, contenido);
+            logger.info("Notificación de actualización de perfil enviada a: {}", destinatarioEmail);
+
+        } catch (Exception e) {
+            logger.error("Error enviando notificación de actualización de perfil a {}: {}", destinatarioEmail, e.getMessage());
+        }
+    }
+
+    /**
+     * Método central para enviar emails usando SMTP Gmail
+     */
+    private void enviarEmail(String destinatario, String asunto, String contenidoHtml)
+            throws MessagingException, UnsupportedEncodingException {
+        MimeMessage mensaje = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
+
+        helper.setFrom(fromEmail, fromName);
+        helper.setTo(destinatario);
+        helper.setSubject(asunto);
+        helper.setText(contenidoHtml, true);
+
+        mailSender.send(mensaje);
+    }
+
+    private String construirPlantillaNotificacionEstado(String empleadoNombre, String tipo,
+                                                         String estado, String fechaInicio,
+                                                         String fechaFin, String comentarios,
+                                                         String gestionadoPor) {
+        String colorEstado = estado.contains("Aprobado") ? "#28a745" : "#dc3545";
+        String accion = estado.contains("Aprobado") ? "aprobada" : "rechazada";
+
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+                    .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    .header { background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 30px; text-align: center; }
+                    .content { padding: 30px; }
+                    .estado { display: inline-block; padding: 10px 20px; border-radius: 5px; color: white; font-weight: bold; background-color: %s; }
+                    .info-box { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #667eea; }
+                    .gestionado { background: #e7f3ff; padding: 12px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #007bff; }
+                    .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Sistema ControlNGR</h1>
+                        <p>Notificación de Solicitud</p>
+                    </div>
+                    <div class="content">
+                        <p>Hola <strong>%s</strong>,</p>
+                        <p>Tu solicitud ha sido <strong>%s</strong>. A continuación el detalle:</p>
+
+                        <div class="info-box">
+                            <p><strong>Tipo:</strong> %s</p>
+                            <p><strong>Estado:</strong> <span class="estado">%s</span></p>
+                            <p><strong>Período:</strong> %s al %s</p>
+                            %s
+                        </div>
+
+                        <div class="gestionado">
+                            <p><strong>Gestionado por:</strong> %s</p>
+                            <p><strong>Fecha de gestión:</strong> %s</p>
+                        </div>
+
+                        <p>Si tienes alguna pregunta, contacta a tu supervisor.</p>
+                    </div>
+                    <div class="footer">
+                        <p>Sistema ControlNGR - Notificación automática</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """.formatted(
+                colorEstado,
+                empleadoNombre,
+                accion,
+                tipo,
+                estado,
+                fechaInicio,
+                fechaFin,
+                (comentarios != null && !comentarios.trim().isEmpty())
+                    ? "<p><strong>Comentarios:</strong> " + comentarios + "</p>"
+                    : "",
+                gestionadoPor != null ? gestionadoPor : "Sistema",
+                LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+        );
+    }
+
+    private String construirPlantillaNuevaSolicitud(String supervisorNombre, String empleadoNombre,
+                                                     String tipo, String fechaInicio, String fechaFin) {
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+                    .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    .header { background: linear-gradient(135deg, #f093fb 0%%, #f5576c 100%%); color: white; padding: 30px; text-align: center; }
+                    .content { padding: 30px; }
+                    .alert { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                    .info-box { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #f5576c; }
+                    .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; }
+                    .btn { display: inline-block; padding: 12px 24px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Nueva Solicitud Pendiente</h1>
+                        <p>Requiere tu revisión</p>
+                    </div>
+                    <div class="content">
+                        <p>Hola <strong>%s</strong>,</p>
+
+                        <div class="alert">
+                            <strong>Acción requerida:</strong> Tienes una nueva solicitud pendiente de revisión.
+                        </div>
+
+                        <div class="info-box">
+                            <p><strong>Empleado:</strong> %s</p>
+                            <p><strong>Tipo de Solicitud:</strong> %s</p>
+                            <p><strong>Período Solicitado:</strong> %s al %s</p>
+                            <p><strong>Fecha de Solicitud:</strong> %s</p>
+                        </div>
+
+                        <p>Por favor, ingresa al sistema para revisar y gestionar esta solicitud.</p>
+                    </div>
+                    <div class="footer">
+                        <p>Sistema ControlNGR - Notificación automática</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """.formatted(
+                supervisorNombre,
+                empleadoNombre,
+                tipo,
+                fechaInicio,
+                fechaFin,
+                LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+        );
+    }
+
+    private String construirPlantillaSolicitudSupervisor(String adminNombre, String supervisorNombre,
+                                                          String tipo, String fechaInicio, String fechaFin) {
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+                    .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    .header { background: linear-gradient(135deg, #fa709a 0%%, #fee140 100%%); color: white; padding: 30px; text-align: center; }
+                    .content { padding: 30px; }
+                    .alert { background: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; margin: 15px 0; color: #721c24; }
+                    .info-box { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #fa709a; }
+                    .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; }
+                    .important { background: #e2e3e5; padding: 10px; border-radius: 5px; margin-top: 15px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Solicitud de Supervisor</h1>
+                        <p>Requiere aprobación de Administrador</p>
+                    </div>
+                    <div class="content">
+                        <p>Hola <strong>%s</strong>,</p>
+
+                        <div class="alert">
+                            <strong>Importante:</strong> Un supervisor ha creado una solicitud que solo puede ser aprobada por un administrador.
+                        </div>
+
+                        <div class="info-box">
+                            <p><strong>Supervisor:</strong> %s</p>
+                            <p><strong>Tipo de Solicitud:</strong> %s</p>
+                            <p><strong>Período Solicitado:</strong> %s al %s</p>
+                            <p><strong>Fecha de Solicitud:</strong> %s</p>
+                        </div>
+
+                        <div class="important">
+                            <p><strong>Nota:</strong> Los supervisores no pueden auto-aprobar sus solicitudes. Solo los administradores tienen permisos para esta acción.</p>
+                        </div>
+
+                        <p>Por favor, ingresa al sistema para revisar esta solicitud.</p>
+                    </div>
+                    <div class="footer">
+                        <p>Sistema ControlNGR - Notificación automática</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """.formatted(
+                adminNombre,
+                supervisorNombre,
+                tipo,
+                fechaInicio,
+                fechaFin,
+                LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+        );
+    }
+
+    private String construirPlantillaCambioPassword(String empleadoNombre) {
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+                    .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    .header { background: linear-gradient(135deg, #11998e 0%%, #38ef7d 100%%); color: white; padding: 30px; text-align: center; }
+                    .content { padding: 30px; }
+                    .success { background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 15px 0; color: #155724; }
+                    .warning { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                    .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Cambio de Contraseña</h1>
+                        <p>Confirmación de seguridad</p>
+                    </div>
+                    <div class="content">
+                        <p>Hola <strong>%s</strong>,</p>
+
+                        <div class="success">
+                            <strong>Contraseña actualizada exitosamente</strong>
+                        </div>
+
+                        <p>Tu contraseña ha sido cambiada el <strong>%s</strong> a las <strong>%s</strong>.</p>
+
+                        <div class="warning">
+                            <strong>Si no realizaste este cambio:</strong>
+                            <ul>
+                                <li>Contacta inmediatamente al administrador</li>
+                                <li>Cambia tu contraseña nuevamente</li>
+                                <li>Reporta cualquier actividad sospechosa</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <p>Sistema ControlNGR - Notificación de seguridad</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """.formatted(
+                empleadoNombre,
+                LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")),
+                LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+        );
+    }
+
+    private String construirPlantillaActualizacionPerfil(String empleadoNombre) {
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+                    .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    .header { background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 30px; text-align: center; }
+                    .content { padding: 30px; }
+                    .success { background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 15px 0; color: #155724; }
+                    .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Perfil Actualizado</h1>
+                    </div>
+                    <div class="content">
+                        <p>Hola <strong>%s</strong>,</p>
+
+                        <div class="success">
+                            <strong>Tu información de perfil ha sido actualizada correctamente.</strong>
+                        </div>
+
+                        <p>Fecha de actualización: <strong>%s</strong> a las <strong>%s</strong></p>
+
+                        <p>Por favor verifica que toda tu información esté correcta ingresando al sistema.</p>
+                    </div>
+                    <div class="footer">
+                        <p>Sistema ControlNGR - Notificación automática</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """.formatted(
+                empleadoNombre,
+                LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")),
+                LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+        );
+    }
+
     private String formatearTipoSolicitud(String tipo) {
-        switch(tipo.toLowerCase()) {
-            case "vacaciones": return "🏖️ Vacaciones";
-            case "permiso": return "📋 Permiso Personal";
-            case "descanso": return "🏥 Descanso Médico";
-            case "compensacion": return "⏰ Compensación de Horas";
-            case "licencia": return "📄 Licencia Especial";
-            default: return "📝 " + tipo;
-        }
+        if (tipo == null) return "Solicitud";
+        return switch (tipo.toLowerCase()) {
+            case "vacaciones" -> "Vacaciones";
+            case "permiso" -> "Permiso Personal";
+            case "descanso" -> "Descanso Médico";
+            case "compensacion" -> "Compensación de Horas";
+            case "licencia" -> "Licencia Especial";
+            default -> tipo;
+        };
     }
-    
+
     private String formatearEstado(String estado) {
-        switch(estado.toLowerCase()) {
-            case "aprobado": return "✅ Aprobado";
-            case "rechazado": return "❌ Rechazado";
-            case "pendiente": return "⏳ Pendiente";
-            case "en_revision": return "🔍 En Revisión";
-            default: return estado;
-        }
-    }
-    // Notificación específica para solicitudes de supervisor   
-    public void enviarNotificacionSolicitudSupervisor(String destinatarioReal, String adminNombre, 
-        String supervisorNombre, String tipoSolicitud,
-        String fechaInicio, String fechaFin) {
-    try {
-    String tipoFormateado = formatearTipoSolicitud(tipoSolicitud);
-
-    Map<String, String> emailData = new HashMap<>();
-    emailData.put("_replyto", "sistema@controlngr.com");
-    emailData.put("_subject", "🔔 SOLICITUD DE SUPERVISOR PENDIENTE - Sistema ControlNGR");
-    emailData.put("email", destinatarioReal);
-    emailData.put("admin", adminNombre);
-    emailData.put("supervisor", supervisorNombre);
-    emailData.put("tipo", tipoFormateado);
-    emailData.put("fecha_inicio", fechaInicio);
-    emailData.put("fecha_fin", fechaFin);
-    emailData.put("message", 
-    "Hola " + adminNombre + ",\n\n" +
-    "🔔 **SOLICITUD DE SUPERVISOR REQUIERE APROBACIÓN**\n" +
-    "─────────────────────────────────────────────\n\n" +
-    "👨‍💼 **Supervisor**: " + supervisorNombre + "\n" +
-    "📋 **Tipo de Solicitud**: " + tipoFormateado + "\n" +
-    "📅 **Período Solicitado**: " + fechaInicio + " al " + fechaFin + "\n" +
-    "⏰ **Fecha de Solicitud**: " + java.time.LocalDate.now() + "\n" +
-    "⚠️ **Importante**: Solo administradores pueden aprobar solicitudes de supervisores\n\n" +
-    "─────────────────────────────────────────────\n" +
-    "📋 **ACCION REQUERIDA**\n\n" +
-    "Por favor, revise esta solicitud en el sistema:\n" +
-    "• Verifique disponibilidad del supervisor\n" +
-    "• Considere impacto en el equipo\n" +
-    "• Aprobe o rechace según corresponda\n\n" +
-    "⚠️ **NOTA IMPORTANTE**\n" +
-    "• Supervisores NO pueden auto-aprobar sus solicitudes\n" +
-    "• Solo administradores tienen permisos para esta acción\n" +
-    "• Considere cobertura del equipo durante la ausencia\n\n" +
-    "Saludos,\n" +
-    "✅ Sistema ControlNGR"
-    );
-
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-
-    HttpEntity<Map<String, String>> request = new HttpEntity<>(emailData, headers);
-    ResponseEntity<String> response = restTemplate.postForEntity(formspreeUrl, request, String.class);
-
-    if (response.getStatusCode() == HttpStatus.OK) {
-    System.out.println("✅ Notificación enviada a admin sobre solicitud de supervisor: " + destinatarioReal);
-    } else {
-    System.out.println("❌ Error enviando a admin " + destinatarioReal);
-    }
-
-    } catch (Exception e) {
-    System.err.println("❌ Error enviando notificación a " + destinatarioReal + ": " + e.getMessage());
-    }
+        if (estado == null) return "Pendiente";
+        return switch (estado.toLowerCase()) {
+            case "aprobado" -> "Aprobado";
+            case "rechazado" -> "Rechazado";
+            case "pendiente" -> "Pendiente";
+            case "en_revision" -> "En Revisión";
+            default -> estado;
+        };
     }
 }

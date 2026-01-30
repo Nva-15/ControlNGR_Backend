@@ -321,7 +321,7 @@ public class EmpleadoController {
             }
             
             // Verificar si el email ya existe
-            Optional<Empleado> empleadoExistente = empleadoService.findByEmail(email);
+            Optional<Empleado> empleadoExistente = empleadoService.findFirstByEmail(email);
             if (empleadoExistente.isPresent() && !empleadoExistente.get().getId().equals(id)) {
                 return ResponseEntity.badRequest()
                         .body(Map.of("error", "El email ya está registrado por otro usuario", "success", false));

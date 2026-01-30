@@ -27,7 +27,11 @@ public class SolicitudService {
     @Autowired
     private HorarioSemanalService horarioSemanalService;
 
+    @Autowired
+    private EmailService emailService;
+
     private static final DateTimeFormatter AUDIT_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     
     public boolean puedeEditarSolicitud(Integer solicitudId, Integer empleadoId, String rolEmpleado) {
         Optional<Solicitud> solicitudOpt = solicitudRepository.findById(solicitudId);
@@ -150,7 +154,38 @@ public class SolicitudService {
             System.err.println("Error al actualizar horarios semanales: " + e.getMessage());
         }
 
+        // Enviar notificación al empleado sobre el estado de su solicitud
+        notificarGestionSolicitud(savedSolicitud, aprobador, comentarios);
+
         return new SolicitudResponseDTO(savedSolicitud);
+    }
+
+    /**
+     * Notifica al empleado cuando su solicitud es aprobada o rechazada
+     */
+    private void notificarGestionSolicitud(Solicitud solicitud, Empleado aprobador, String comentarios) {
+        try {
+            Empleado empleado = solicitud.getEmpleado();
+            if (empleado.getEmail() != null && !empleado.getEmail().isEmpty()) {
+                String fechaInicio = solicitud.getFechaInicio().format(DATE_FORMATTER);
+                String fechaFin = solicitud.getFechaFin().format(DATE_FORMATTER);
+                String nombreAprobador = aprobador != null ? aprobador.getNombre() : "Sistema";
+
+                emailService.enviarNotificacionSolicitud(
+                    empleado.getEmail(),
+                    empleado.getNombre(),
+                    solicitud.getTipo(),
+                    solicitud.getEstado(),
+                    comentarios,
+                    fechaInicio,
+                    fechaFin,
+                    nombreAprobador
+                );
+            }
+        } catch (Exception e) {
+            // Log error pero no fallar la gestión de solicitud
+            System.err.println("Error enviando notificación de gestión: " + e.getMessage());
+        }
     }
 
     public SolicitudResponseDTO editarSolicitud(Integer id, Map<String, Object> payload, 
@@ -290,9 +325,59 @@ public class SolicitudService {
         solicitud.setEstado("pendiente");
         
         Solicitud savedSolicitud = solicitudRepository.save(solicitud);
+
+        // Enviar notificaciones por email
+        notificarNuevaSolicitud(empleado, savedSolicitud);
+
         return new SolicitudResponseDTO(savedSolicitud);
     }
-    
+
+    /**
+     * Notifica a supervisores o admins según el rol del empleado que crea la solicitud
+     */
+    private void notificarNuevaSolicitud(Empleado empleado, Solicitud solicitud) {
+        try {
+            String rolEmpleado = empleado.getRol();
+            String fechaInicio = solicitud.getFechaInicio().format(DATE_FORMATTER);
+            String fechaFin = solicitud.getFechaFin().format(DATE_FORMATTER);
+
+            if ("supervisor".equals(rolEmpleado)) {
+                // Supervisor crea solicitud -> notificar a admins
+                List<Empleado> admins = empleadoRepository.findByRol("admin");
+                for (Empleado admin : admins) {
+                    if (admin.getEmail() != null && !admin.getEmail().isEmpty()) {
+                        emailService.enviarNotificacionSolicitudSupervisor(
+                            admin.getEmail(),
+                            admin.getNombre(),
+                            empleado.getNombre(),
+                            solicitud.getTipo(),
+                            fechaInicio,
+                            fechaFin
+                        );
+                    }
+                }
+            } else if ("tecnico".equals(rolEmpleado) || "hd".equals(rolEmpleado) || "noc".equals(rolEmpleado)) {
+                // Técnico/HD/NOC crea solicitud -> notificar a supervisores
+                List<Empleado> supervisores = empleadoRepository.findByRol("supervisor");
+                for (Empleado supervisor : supervisores) {
+                    if (supervisor.getEmail() != null && !supervisor.getEmail().isEmpty()) {
+                        emailService.enviarNotificacionNuevaSolicitud(
+                            supervisor.getEmail(),
+                            supervisor.getNombre(),
+                            empleado.getNombre(),
+                            solicitud.getTipo(),
+                            fechaInicio,
+                            fechaFin
+                        );
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Log error pero no fallar la creación de solicitud
+            System.err.println("Error enviando notificaciones de nueva solicitud: " + e.getMessage());
+        }
+    }
+
     public List<Solicitud> verificarConflictosFecha(Integer empleadoId, LocalDate fechaInicio, LocalDate fechaFin) {
         if (fechaInicio == null || fechaFin == null) {
             throw new RuntimeException("Fechas inválidas");
