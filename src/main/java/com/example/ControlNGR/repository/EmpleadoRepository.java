@@ -10,25 +10,31 @@ import java.util.Optional;
 
 @Repository
 public interface EmpleadoRepository extends JpaRepository<Empleado, Integer> {
+
     Optional<Empleado> findByIdentificador(String identificador);
+
     Optional<Empleado> findByDni(String dni);
+
     Optional<Empleado> findByUsername(String username);
-    // Buscar primer empleado por email
+
     Optional<Empleado> findFirstByEmail(String email);
 
-    // Verificar si existe un email
     boolean existsByEmail(String email);
-    
+
     Boolean existsByDni(String dni);
+
     Boolean existsByUsername(String username);
-    
+
     List<Empleado> findByActivo(Boolean activo);
+
     List<Empleado> findByNivel(String nivel);
+
     List<Empleado> findByRol(String rol);
+
     List<Empleado> findByUsuarioActivo(Boolean usuarioActivo);
+
     List<Empleado> findByRolAndActivo(String rol, Boolean activo);
 
-    // Excluir admin de la vista de horarios (admin no tiene horarios)
     @Query("SELECT e FROM Empleado e WHERE e.activo = true AND LOWER(e.rol) <> 'admin'")
     List<Empleado> findEmpleadosConHorario();
 

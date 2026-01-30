@@ -32,9 +32,7 @@ public class EmailService {
     @Value("${app.mail.from-name:Sistema Control NGR}")
     private String fromName;
 
-    /**
-     * Notifica al empleado sobre el estado de su solicitud (aprobada/rechazada)
-     */
+    /** Notifica al empleado sobre el estado de su solicitud. */
     public void enviarNotificacionSolicitud(String destinatarioEmail, String empleadoNombre,
                                             String tipoSolicitud, String estado,
                                             String comentarios, String fechaInicio,
@@ -62,9 +60,7 @@ public class EmailService {
         }
     }
 
-    /**
-     * Notifica a supervisores cuando un técnico/hd/noc crea una nueva solicitud
-     */
+    /** Notifica a supervisores cuando se crea una nueva solicitud. */
     public void enviarNotificacionNuevaSolicitud(String destinatarioEmail, String supervisorNombre,
                                                   String empleadoNombre, String tipoSolicitud,
                                                   String fechaInicio, String fechaFin) {
@@ -89,9 +85,7 @@ public class EmailService {
         }
     }
 
-    /**
-     * Notifica a admin cuando un supervisor crea una solicitud
-     */
+    /** Notifica a admin cuando un supervisor crea una solicitud. */
     public void enviarNotificacionSolicitudSupervisor(String destinatarioEmail, String adminNombre,
                                                        String supervisorNombre, String tipoSolicitud,
                                                        String fechaInicio, String fechaFin) {
@@ -116,9 +110,7 @@ public class EmailService {
         }
     }
 
-    /**
-     * Notifica al empleado sobre cambio de contraseña
-     */
+    /** Notifica al empleado sobre cambio de contraseña. */
     public void enviarNotificacionCambioPassword(String destinatarioEmail, String empleadoNombre) {
         if (!emailEnabled || destinatarioEmail == null || destinatarioEmail.isEmpty()) {
             logger.warn("Email deshabilitado o destinatario vacío");
@@ -137,9 +129,7 @@ public class EmailService {
         }
     }
 
-    /**
-     * Notifica al empleado sobre actualización de perfil
-     */
+    /** Notifica al empleado sobre actualización de perfil. */
     public void enviarNotificacionActualizacionPerfil(String destinatarioEmail, String empleadoNombre) {
         if (!emailEnabled || destinatarioEmail == null || destinatarioEmail.isEmpty()) {
             logger.warn("Email deshabilitado o destinatario vacío");
@@ -158,9 +148,6 @@ public class EmailService {
         }
     }
 
-    /**
-     * Método central para enviar emails usando SMTP Gmail
-     */
     private void enviarEmail(String destinatario, String asunto, String contenidoHtml)
             throws MessagingException, UnsupportedEncodingException {
         MimeMessage mensaje = mailSender.createMimeMessage();
