@@ -19,7 +19,16 @@
       "Bash(./gradlew clean build:*)",
       "Bash(netstat:*)",
       "Bash(taskkill:*)",
-      "Bash(./gradlew bootRun:*)"
+      "Bash(./gradlew bootRun:*)",
+      "Bash(findstr:*)",
+      "Bash(.gradlew.bat:*)",
+      "Bash(cd:*)",
+      "Bash(gradlew.bat clean build:*)",
+      "Bash(D:)",
+      "Bash(cmd.exe /c \"cd /d D:\\\\Mis Proyectos personales\\\\ControlNGR && gradlew.bat clean build --no-daemon -x test\")",
+      "Bash(\"D:/Mis Proyectos personales/ControlNGR/gradlew.bat\" -p \"D:/Mis Proyectos personales/ControlNGR\" clean build --no-daemon -x test)",
+      "Bash(./gradlew.bat clean build:*)",
+      "Bash(java -jar:*)"
     ]
   }
 }

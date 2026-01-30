@@ -24,24 +24,20 @@ public class WebConfig implements WebMvcConfigurer {
     }
     
     @Override
-public void addResourceHandlers(ResourceHandlerRegistry registry) {
-    //Configuración para servir archivos estáticos del propio JAR
-    registry.addResourceHandler("/**")
-            .addResourceLocations(
-                "classpath:/static/",
-                "classpath:/public/",
-                "classpath:/resources/",
-                "classpath:/META-INF/resources/"
-            )
-            .setCachePeriod(0);
-    
-    // 2. Configuración para servir imágenes desde la RUTA EXTERNA
-    // Eliminar "file:///" del path para Spring
-    String rutaLocal = storageLocation.replace("file:///", "");
-    System.out.println("📂 Mapeando /img/** a: " + rutaLocal);
-    
-    registry.addResourceHandler("/img/**")
-            .addResourceLocations("file:" + rutaLocal)
-            .setCachePeriod(0);
-}
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/**")
+                .addResourceLocations(
+                    "classpath:/static/",
+                    "classpath:/public/",
+                    "classpath:/resources/",
+                    "classpath:/META-INF/resources/"
+                )
+                .setCachePeriod(3600);
+
+        String rutaLocal = storageLocation.replace("file:///", "");
+
+        registry.addResourceHandler("/img/**")
+                .addResourceLocations("file:" + rutaLocal)
+                .setCachePeriod(86400);
+    }
 }
