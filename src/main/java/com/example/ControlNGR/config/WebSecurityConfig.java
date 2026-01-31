@@ -123,14 +123,16 @@ public class WebSecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        configuration.setAllowedOrigins(Arrays.asList(
-            "http://localhost:4200",
-            "http://127.0.0.1:4200",
-            "http://localhost:8080",
-            "http://127.0.0.1:8080"
+
+        // Permitir acceso desde localhost (desarrollo) y desde cualquier IP en red local (producción)
+        configuration.setAllowedOriginPatterns(Arrays.asList(
+            "http://localhost:*",
+            "http://127.0.0.1:*",
+            "http://192.168.*.*:*",
+            "http://10.*.*.*:*",
+            "http://172.16.*.*:*"
         ));
-        
+
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"));
         configuration.setAllowedHeaders(Arrays.asList("*")); // Permitir todos los headers
         configuration.setExposedHeaders(Arrays.asList("Authorization"));
