@@ -292,16 +292,53 @@ public class SolicitudController {
             @RequestParam(value = "formato", defaultValue = "json") String formato) {
         try {
             Map<String, Object> reporte = solicitudService.exportarSolicitudes(tipoReporte, empleadoId);
-            
+
             return ResponseEntity.ok()
                     .header("Content-Type", "application/json")
                     .body(reporte);
-                    
+
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error al exportar: " + e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/eliminar/{id}")
+    public ResponseEntity<?> eliminarSolicitud(
+            @PathVariable("id") Integer id,
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "No autorizado", "success", false));
+            }
+
+            String token = authHeader.substring(7);
+            String username = jwtUtil.extractUsername(token);
+            var empleadoOpt = empleadoService.findByUsername(username);
+
+            if (!empleadoOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Empleado no encontrado", "success", false));
+            }
+
+            Integer empleadoId = empleadoOpt.get().getId();
+
+            solicitudService.eliminarSolicitud(id, empleadoId);
+
+            return ResponseEntity.ok(Map.of(
+                "message", "Solicitud eliminada correctamente",
+                "success", true
+            ));
+
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", e.getMessage(), "success", false));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al eliminar solicitud: " + e.getMessage(), "success", false));
         }
     }
 }

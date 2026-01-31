@@ -447,4 +447,28 @@ public class SolicitudService {
         reporte.put("fecha_generacion", LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
         return reporte;
     }
+
+    /** Elimina una solicitud pendiente. */
+    public void eliminarSolicitud(Integer id, Integer empleadoId) {
+        Optional<Solicitud> solicitudOpt = solicitudRepository.findById(id);
+
+        if (!solicitudOpt.isPresent()) {
+            throw new RuntimeException("Solicitud no encontrada");
+        }
+
+        Solicitud solicitud = solicitudOpt.get();
+
+        // Verificar que el empleado sea el dueño de la solicitud
+        if (!solicitud.getEmpleado().getId().equals(empleadoId)) {
+            throw new RuntimeException("No tiene permisos para eliminar esta solicitud");
+        }
+
+        // Solo se pueden eliminar solicitudes pendientes
+        if (!"pendiente".equals(solicitud.getEstado())) {
+            throw new RuntimeException("Solo se pueden eliminar solicitudes pendientes");
+        }
+
+        solicitudRepository.deleteById(id);
+        logger.info("Solicitud {} eliminada por empleado {}", id, empleadoId);
+    }
 }
