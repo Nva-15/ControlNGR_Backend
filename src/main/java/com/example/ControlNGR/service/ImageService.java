@@ -31,6 +31,18 @@ public class ImageService {
     @Value("${app.storage.location}")
     private String storageLocation;
 
+    /**
+     * Normaliza la ruta de almacenamiento removiendo el prefijo file: en cualquier formato
+     * Soporta: file:///path, file://path, file:/path, file:./path
+     */
+    private String normalizarRuta() {
+        if (storageLocation == null) return "";
+        // Remover prefijo file: con cualquier cantidad de slashes (0 a 3)
+        return storageLocation
+            .replaceFirst("^file:/{0,3}", "")
+            .replace("\\", "/");
+    }
+
     private boolean esExtensionValida(String filename) {
         String[] extensionesValidas = {".png", ".jpg", ".jpeg", ".gif", ".bmp"};
         String extension = filename.toLowerCase();
@@ -95,12 +107,12 @@ public class ImageService {
                 .replaceAll("^_|_$", "");
 
         String nombreArchivo = nombreLimpio + extension;
-        Path rutaCompleta = Paths.get(storageLocation.replace("file:///", ""), nombreArchivo);
+        Path rutaCompleta = Paths.get(normalizarRuta(), nombreArchivo);
 
         int contador = 1;
         while (Files.exists(rutaCompleta)) {
             nombreArchivo = nombreLimpio + "_" + contador + extension;
-            rutaCompleta = Paths.get(storageLocation.replace("file:///", ""), nombreArchivo);
+            rutaCompleta = Paths.get(normalizarRuta(), nombreArchivo);
             contador++;
         }
         return nombreArchivo;
@@ -229,9 +241,9 @@ public class ImageService {
         logger.info("Imagen optimizada: {} KB -> {} KB", tamanoOriginal / 1024, imagenComprimida.length / 1024);
 
         String nombreArchivo = generarNombreArchivo(nombreEmpleado, extensionFinal);
-        String rutaDestino = storageLocation.replace("file:///", "") + nombreArchivo;
+        String rutaDestino = normalizarRuta() + nombreArchivo;
 
-        Path directorio = Paths.get(storageLocation.replace("file:///", ""));
+        Path directorio = Paths.get(normalizarRuta());
         if (!Files.exists(directorio)) {
             Files.createDirectories(directorio);
         }
@@ -244,7 +256,7 @@ public class ImageService {
 
     public void eliminarImagenAnterior(String nombreArchivo) throws IOException {
         if (nombreArchivo != null && !nombreArchivo.isEmpty() && !nombreArchivo.equals("img/perfil.png")) {
-            String rutaCompleta = storageLocation.replace("file:///", "") +
+            String rutaCompleta = normalizarRuta() +
                 nombreArchivo.replace("img/", "");
             Path ruta = Paths.get(rutaCompleta);
             if (Files.exists(ruta)) {
@@ -257,7 +269,7 @@ public class ImageService {
         if (nombreArchivo == null || nombreArchivo.isEmpty()) {
             return false;
         }
-        String rutaCompleta = storageLocation.replace("file:///", "") +
+        String rutaCompleta = normalizarRuta() +
             nombreArchivo.replace("img/", "");
         Path ruta = Paths.get(rutaCompleta);
         return Files.exists(ruta);

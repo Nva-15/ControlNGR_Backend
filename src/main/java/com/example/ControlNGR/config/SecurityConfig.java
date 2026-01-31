@@ -30,11 +30,8 @@ public class SecurityConfig implements WebMvcConfigurer {
     
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // Configurar recursos estáticos
-        registry.addResourceHandler("/img/**")
-                .addResourceLocations("classpath:/static/img/")
-                .setCachePeriod(0);
-        
+        // Configurar recursos estáticos generales
+        // NOTA: /img/** se configura en WebConfig con la ruta de almacenamiento externa
         registry.addResourceHandler("/**")
                 .addResourceLocations(
                     "classpath:/static/",
