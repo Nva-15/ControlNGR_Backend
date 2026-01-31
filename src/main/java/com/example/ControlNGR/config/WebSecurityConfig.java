@@ -35,10 +35,18 @@ public class WebSecurityConfig {
                 // IMPORTANTE: Permitir /error para ver excepciones reales (400, 500) en vez de 403
                 .requestMatchers("/error").permitAll()
                 
-                // Recursos estáticos
+                // Recursos estáticos y rutas de Angular
                 .requestMatchers(
                     "/",
                     "/index.html",
+                    "/login",
+                    "/dashboard",
+                    "/empleados",
+                    "/asistencias",
+                    "/solicitudes",
+                    "/horarios",
+                    "/organigrama",
+                    "/reportes",
                     "/img/**",
                     "/css/**",
                     "/js/**",
@@ -46,6 +54,7 @@ public class WebSecurityConfig {
                     "/resources/**",
                     "/uploads/**",
                     "/assets/**",
+                    "/media/**",
                     "/favicon.ico",
                     "/*.png",
                     "/*.jpg",
@@ -54,6 +63,18 @@ public class WebSecurityConfig {
                     "/*.svg",
                     "/*.ico",
                     "/*.html",
+                    "/*.js",           // Archivos JavaScript de Angular
+                    "/*.css",          // Archivos CSS de Angular
+                    "/*.map",          // Source maps
+                    "/*.woff",         // Fuentes
+                    "/*.woff2",        // Fuentes
+                    "/*.ttf",          // Fuentes
+                    "/*.eot",          // Fuentes
+                    "/chunk-*.js",     // Chunks de Angular
+                    "/main-*.js",      // Main bundle de Angular
+                    "/polyfills-*.js", // Polyfills de Angular
+                    "/scripts-*.js",   // Scripts de Angular
+                    "/styles-*.css",   // Estilos de Angular
                     "/webjars/**",
                     "/swagger-ui/**",
                     "/v3/api-docs/**"

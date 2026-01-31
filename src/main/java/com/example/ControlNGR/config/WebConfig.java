@@ -25,19 +25,21 @@ public class WebConfig implements WebMvcConfigurer {
     
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // Servir archivos estáticos del frontend
         registry.addResourceHandler("/**")
-                .addResourceLocations(
-                    "classpath:/static/",
-                    "classpath:/public/",
-                    "classpath:/resources/",
-                    "classpath:/META-INF/resources/"
-                )
-                .setCachePeriod(3600);
+                .addResourceLocations("classpath:/static/")
+                .setCachePeriod(3600)
+                .resourceChain(true);
 
-        String rutaLocal = storageLocation.replace("file:///", "");
+        // Servir imágenes de empleados
+        // Asegurarse de que la ruta termine con /
+        String rutaImagen = storageLocation;
+        if (!rutaImagen.endsWith("/")) {
+            rutaImagen += "/";
+        }
 
         registry.addResourceHandler("/img/**")
-                .addResourceLocations("file:" + rutaLocal)
+                .addResourceLocations(rutaImagen)
                 .setCachePeriod(86400);
     }
 }

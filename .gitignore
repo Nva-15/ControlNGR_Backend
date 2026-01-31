@@ -35,3 +35,8 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Frontend compilado (archivos generados) ###
+src/main/resources/static/
+# Excepto el .gitkeep si existe
+!src/main/resources/static/.gitkeep
