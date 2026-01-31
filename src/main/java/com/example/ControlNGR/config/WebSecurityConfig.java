@@ -47,6 +47,7 @@ public class WebSecurityConfig {
                     "/horarios",
                     "/organigrama",
                     "/reportes",
+                    "/eventos",
                     "/img/**",
                     "/css/**",
                     "/js/**",
@@ -110,7 +111,21 @@ public class WebSecurityConfig {
                     .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
                 .requestMatchers("/api/solicitudes/exportar/**")
                     .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
-                
+
+                // EVENTOS - VER (todos los roles autenticados)
+                .requestMatchers(HttpMethod.GET, "/api/eventos/**")
+                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
+                // EVENTOS - Responder y comentar (todos los roles)
+                .requestMatchers(HttpMethod.POST, "/api/eventos/responder", "/api/eventos/*/comentarios")
+                    .hasAnyRole("ADMIN", "SUPERVISOR", "TECNICO", "HD", "NOC")
+                // EVENTOS - Crear, editar, eliminar (solo admin/supervisor)
+                .requestMatchers(HttpMethod.POST, "/api/eventos/crear")
+                    .hasAnyRole("ADMIN", "SUPERVISOR")
+                .requestMatchers(HttpMethod.PUT, "/api/eventos/**")
+                    .hasAnyRole("ADMIN", "SUPERVISOR")
+                .requestMatchers(HttpMethod.DELETE, "/api/eventos/**")
+                    .hasAnyRole("ADMIN", "SUPERVISOR")
+
                 // El resto requiere autenticación
                 .anyRequest().authenticated()
             )

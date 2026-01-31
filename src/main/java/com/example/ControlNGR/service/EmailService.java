@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
+import org.springframework.scheduling.annotation.Async;
 import java.io.UnsupportedEncodingException;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -33,6 +34,7 @@ public class EmailService {
     private String fromName;
 
     /** Notifica al empleado sobre el estado de su solicitud. */
+    @Async
     public void enviarNotificacionSolicitud(String destinatarioEmail, String empleadoNombre,
                                             String tipoSolicitud, String estado,
                                             String comentarios, String fechaInicio,
@@ -61,6 +63,7 @@ public class EmailService {
     }
 
     /** Notifica a supervisores cuando se crea una nueva solicitud. */
+    @Async
     public void enviarNotificacionNuevaSolicitud(String destinatarioEmail, String supervisorNombre,
                                                   String empleadoNombre, String tipoSolicitud,
                                                   String fechaInicio, String fechaFin) {
@@ -86,6 +89,7 @@ public class EmailService {
     }
 
     /** Notifica a admin cuando un supervisor crea una solicitud. */
+    @Async
     public void enviarNotificacionSolicitudSupervisor(String destinatarioEmail, String adminNombre,
                                                        String supervisorNombre, String tipoSolicitud,
                                                        String fechaInicio, String fechaFin) {
@@ -111,6 +115,7 @@ public class EmailService {
     }
 
     /** Notifica al empleado sobre cambio de contraseña. */
+    @Async
     public void enviarNotificacionCambioPassword(String destinatarioEmail, String empleadoNombre) {
         if (!emailEnabled || destinatarioEmail == null || destinatarioEmail.isEmpty()) {
             logger.warn("Email deshabilitado o destinatario vacío");
@@ -130,6 +135,7 @@ public class EmailService {
     }
 
     /** Notifica al empleado sobre actualización de perfil. */
+    @Async
     public void enviarNotificacionActualizacionPerfil(String destinatarioEmail, String empleadoNombre) {
         if (!emailEnabled || destinatarioEmail == null || destinatarioEmail.isEmpty()) {
             logger.warn("Email deshabilitado o destinatario vacío");
